@@ -76,10 +76,10 @@ function playBtn(ex) {
   return t ? `<button class="play" data-say="${escAttr(t)}" title="播放發音">🔊</button>` : "";
 }
 
-// ---- 選課狀態（預設只選最新的一課）----
-const picked = new Set(LESSONS.length ? [lessonKey(LESSONS[LESSONS.length - 1])] : []);
+// ---- 選課狀態（一次只選一課，預設選最新的一課）----
+let selectedKey = LESSONS.length ? lessonKey(LESSONS[LESSONS.length - 1]) : null;
 
-function activeLessons() { return LESSONS.filter(l => picked.has(lessonKey(l))); }
+function activeLessons() { return LESSONS.filter(l => lessonKey(l) === selectedKey); }
 
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
@@ -87,18 +87,18 @@ function renderPicker() {
   LESSONS.forEach(l => {
     const key = lessonKey(l);
     const label = document.createElement("label");
-    label.className = picked.has(key) ? "on" : "";
+    label.className = key === selectedKey ? "on" : "";
     label.textContent = lessonLabel(l);
     label.onclick = () => {
-      if (picked.has(key)) picked.delete(key); else picked.add(key);
-      label.className = picked.has(key) ? "on" : "";
+      if (key === selectedKey) return;   // 已選中就不重複處理
+      selectedKey = key;
+      cancelAuto();                       // 換課時停止自動播放
+      renderPicker();
       renderActive();
     };
     box.appendChild(label);
   });
 }
-document.getElementById("pick-all").onclick = () => { LESSONS.forEach(l => picked.add(lessonKey(l))); renderPicker(); renderActive(); };
-document.getElementById("pick-none").onclick = () => { picked.clear(); renderPicker(); renderActive(); };
 
 // ---- 分頁 ----
 let currentTab = "intro";
