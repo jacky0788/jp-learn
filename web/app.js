@@ -380,3 +380,10 @@ if (!LESSONS.length) {
   renderPicker();
   renderActive();
 }
+
+// ---- 離線支援（Service Worker）----
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}

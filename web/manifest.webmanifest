@@ -1,0 +1,16 @@
+{
+  "name": "日文複習",
+  "short_name": "日文複習",
+  "description": "來學日本語 課程複習：單字卡、文法講義、測驗、語音、離線可用。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15171c",
+  "theme_color": "#2b3a55",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
