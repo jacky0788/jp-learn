@@ -1,0 +1,9 @@
+# 必要：解析課程 YAML
+pyyaml
+
+# 選用：啟動器顯示手機連線用的 QR code
+qrcode
+
+# 選用：匯入 iPhone 的 .HEIC 照片時用來轉檔（一般複習用不到）
+pillow-heif
+pillow

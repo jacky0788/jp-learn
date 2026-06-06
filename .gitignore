@@ -1,0 +1,22 @@
+# 自動產生的檔案（用 start 啟動器或 scripts/build.py 重新生成）
+/web/data.js
+/exports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 作業系統
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+
+# 原始上課照片：保留在本機當備份，但「不」上傳到 GitHub
+# （黑板照片可能拍到其他同學，避免肖像外流；課程文字已存在 data/lessons/*.yaml）
+/raw/

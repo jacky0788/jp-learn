@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>日文複習</title>
+<link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+<header>
+  <button id="settings-toggle" title="設定" aria-label="設定">⚙️</button>
+  <h1>日文複習</h1>
+  <nav>
+    <button data-tab="intro" class="active">說明</button>
+    <button data-tab="cards">單字卡</button>
+    <button data-tab="grammar">文法</button>
+    <button data-tab="quiz">測驗</button>
+  </nav>
+</header>
+
+<section id="lesson-picker">
+  <span>課數：</span>
+  <span id="lesson-checks"></span>
+  <button id="pick-all" class="link">全選</button>
+  <button id="pick-none" class="link">全不選</button>
+</section>
+
+<main>
+  <div id="intro" class="tab active"></div>
+  <div id="cards" class="tab"></div>
+  <div id="grammar" class="tab"></div>
+  <div id="quiz" class="tab"></div>
+</main>
+
+<div id="settings-panel" class="hidden">
+  <div class="settings-box">
+    <div class="settings-head"><h3>設定</h3><button id="set-close" aria-label="關閉">✕</button></div>
+
+    <div class="set-section">外觀</div>
+    <label class="set-row"><span>深色模式</span><input type="checkbox" id="set-dark"></label>
+
+    <div class="set-section">單字自動播放</div>
+    <label class="set-row"><span>每個單字播放次數</span><input type="number" id="set-repeats" min="1" max="10" step="1"></label>
+    <label class="set-row"><span>換下一個前等待（秒）</span><input type="number" id="set-gap" min="1" max="30" step="1"></label>
+    <label class="set-row"><span>語速</span><input type="range" id="set-rate" min="0.5" max="1.2" step="0.1"></label>
+  </div>
+</div>
+
+<script src="data.js?v=2"></script>
+<script src="app.js?v=6"></script>
+</body>
+</html>

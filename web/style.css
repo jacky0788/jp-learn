@@ -1,0 +1,164 @@
+* { box-sizing: border-box; }
+body {
+  font-family: "Hiragino Sans", "Yu Gothic", "Microsoft JhengHei", system-ui, sans-serif;
+  margin: 0; background: #f4f5f7; color: #222; line-height: 1.7;
+}
+header {
+  background: #2b3a55; color: #fff; padding: 16px 20px;
+  position: sticky; top: 0; z-index: 10;
+}
+header h1 { margin: 0 0 10px; font-size: 20px; }
+#settings-toggle { position: absolute; top: 14px; right: 16px; width: 38px; height: 38px;
+  border: none; border-radius: 9px; cursor: pointer; font-size: 18px; line-height: 1;
+  background: rgba(255,255,255,.15); }
+#settings-toggle:hover { background: rgba(255,255,255,.3); }
+
+/* 設定面板 */
+.hidden { display: none !important; }
+#settings-panel { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45);
+  display: flex; align-items: flex-start; justify-content: center; }
+.settings-box { background: #fff; margin-top: 64px; width: min(430px, 92vw); border-radius: 12px;
+  padding: 16px 20px 20px; box-shadow: 0 10px 36px rgba(0,0,0,.35); }
+.settings-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.settings-head h3 { margin: 0; color: #2b3a55; }
+#set-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
+.set-section { margin-top: 14px; margin-bottom: 2px; font-size: 13px; color: #8a97ad; font-weight: 600; }
+.set-row { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid #eee; }
+.set-row input[type=number] { width: 72px; font-size: 15px; padding: 5px 7px; border: 1px solid #ccd2da; border-radius: 6px; }
+.set-row input[type=range] { width: 140px; }
+
+.auto-bar { text-align: center; margin-bottom: 12px; }
+.flashcard.auto { cursor: default; }
+
+body.dark .settings-box { background: #232831; color: #e3e6ea; }
+body.dark .settings-head h3 { color: #d7dde6; }
+body.dark .set-row { border-bottom-color: #3a3f47; }
+body.dark .set-row input[type=number] { background: #1f232a; border-color: #3a3f47; color: #e8eaee; }
+nav button {
+  background: transparent; border: 1px solid #6b7a99; color: #cdd6e6;
+  padding: 6px 16px; margin-right: 8px; border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+nav button.active { background: #fff; color: #2b3a55; border-color: #fff; font-weight: 600; }
+
+#lesson-picker {
+  background: #fff; padding: 10px 20px; border-bottom: 1px solid #e3e6ea;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px;
+}
+#lesson-checks label {
+  display: inline-block; padding: 3px 8px; margin: 2px; border: 1px solid #ccd2da;
+  border-radius: 14px; cursor: pointer; user-select: none;
+}
+#lesson-checks label.on { background: #2b3a55; color: #fff; border-color: #2b3a55; }
+#lesson-checks input { display: none; }
+.link { background: none; border: none; color: #2b6cb0; cursor: pointer; font-size: 13px; }
+
+main { max-width: 820px; margin: 0 auto; padding: 20px; }
+.tab { display: none; }
+.tab.active { display: block; }
+
+.flashcard {
+  background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+  padding: 48px 24px; text-align: center; min-height: 220px;
+  display: flex; flex-direction: column; justify-content: center; cursor: pointer;
+}
+.flashcard .jp { font-size: 42px; font-weight: 600; }
+.flashcard .kana { font-size: 22px; color: #555; margin-top: 12px; }
+.flashcard .zh { font-size: 22px; color: #2b6cb0; margin-top: 8px; }
+.flashcard .pos { font-size: 14px; color: #888; margin-top: 8px; }
+.flashcard .hint { font-size: 13px; color: #aaa; margin-top: 20px; }
+
+.controls { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+.controls button {
+  padding: 10px 22px; border-radius: 8px; border: none; cursor: pointer; font-size: 15px;
+}
+.btn-bad { background: #fde2e1; color: #c0392b; }
+.btn-good { background: #d7f0dd; color: #1e8449; }
+.btn-next { background: #e6eaf0; color: #2b3a55; }
+.progress { text-align: center; color: #888; font-size: 13px; margin-top: 14px; }
+
+.intro-card {
+  background: #fff; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06); border-top: 4px solid #2b3a55;
+}
+.intro-card h2 { margin: 0 0 12px; font-size: 19px; color: #2b3a55; }
+.intro-card h4 { margin: 16px 0 6px; color: #5b8a72; font-size: 15px; }
+.intro-card .intro-text p { margin: 0 0 10px; }
+.intro-card ul { margin: 6px 0; padding-left: 22px; }
+.intro-card li { margin-bottom: 4px; }
+.intro-card .goals li { color: #2b3a55; }
+
+.gram-item, .ex-item {
+  background: #fff; border-radius: 10px; padding: 16px 18px; margin-bottom: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.gram-item h3 { margin: 0 0 10px; color: #2b3a55; font-size: 17px;
+  border-bottom: 2px solid #e3e6ea; padding-bottom: 6px; }
+.gram-item .tag, .ex-item .tag { font-size: 12px; color: #fff; background: #8a97ad;
+  padding: 1px 8px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+.lesson-h { color: #2b3a55; font-size: 16px; margin: 8px 0 14px; padding-left: 8px;
+  border-left: 5px solid #2b3a55; }
+
+/* 講義版面 */
+.block { margin: 10px 0; }
+.blabel { display: inline-block; background: #2b3a55; color: #fff; font-size: 12px;
+  padding: 2px 10px; border-radius: 4px; margin-bottom: 4px; }
+.setsuzoku { margin: 6px 0 0; padding-left: 22px; }
+.setsuzoku li { margin-bottom: 4px; }
+.explain p { margin: 4px 0; }
+.practice { margin: 8px 0 0; padding-left: 26px; }
+.practice li { margin-bottom: 6px; cursor: pointer; }
+.practice .ans, .practice .ans-note { display: none; }
+.practice li.revealed .ans, .practice.show-ans .ans { display: inline; color: #1e8449; font-weight: 600; }
+.practice li.revealed .ans-note, .practice.show-ans .ans-note { display: inline; color: #888; font-size: 13px; }
+.practice .pq::after { content: " "; }
+.pnote { font-size: 12px; color: #d98324; margin-left: 8px; }
+.tag.src { background: #5b8a72; }
+.tag.keytag { background: #d98324; }
+.example { margin-top: 8px; padding-left: 12px; border-left: 3px solid #cdd6e6; }
+.example .jp { font-size: 17px; }
+.play { background: #eef2f7; border: 1px solid #cdd6e6; border-radius: 6px; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 2px 7px; margin-left: 6px; vertical-align: middle; }
+.play:hover { background: #2b3a55; }
+.play:active { transform: scale(.92); }
+.example .kana { font-size: 13px; color: #777; }
+.example .zh { font-size: 14px; color: #2b6cb0; }
+
+.quiz-q { font-size: 22px; margin-bottom: 16px; }
+.quiz-input { font-size: 18px; padding: 8px 12px; width: 100%; border: 1px solid #ccd2da; border-radius: 8px; }
+.quiz-ans { margin-top: 14px; font-size: 18px; }
+.quiz-ans .correct { color: #1e8449; }
+.empty { color: #888; text-align: center; padding: 40px; }
+
+/* ===== 深色模式 ===== */
+body.dark { background: #15171c; color: #e3e6ea; }
+body.dark #lesson-picker { background: #1f232a; border-bottom-color: #333a44; }
+body.dark #lesson-checks label { border-color: #3a3f47; color: #cdd6e6; }
+body.dark .link { color: #7fb6e6; }
+body.dark .flashcard,
+body.dark .intro-card,
+body.dark .gram-item,
+body.dark .ex-item { background: #232831; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+body.dark .flashcard .jp,
+body.dark .example .jp,
+body.dark .explain,
+body.dark .intro-card .intro-text,
+body.dark .practice li { color: #e8eaee; }
+body.dark .flashcard .kana,
+body.dark .example .kana { color: #aeb6c2; }
+body.dark .flashcard .zh,
+body.dark .example .zh { color: #7fb6e6; }
+body.dark .flashcard .pos,
+body.dark .flashcard .hint,
+body.dark .progress,
+body.dark .empty { color: #99a2b0; }
+body.dark .gram-item h3 { color: #d7dde6; border-bottom-color: #3a3f47; }
+body.dark .lesson-h { color: #d7dde6; border-left-color: #5b6b8c; }
+body.dark .intro-card { border-top-color: #3a4a6b; }
+body.dark .intro-card h2 { color: #d7dde6; }
+body.dark .intro-card .goals li { color: #9fc1e8; }
+body.dark .example { border-left-color: #3a3f47; }
+body.dark .quiz-input { background: #1f232a; border-color: #3a3f47; color: #e8eaee; }
+body.dark .play { background: #2f343d; border-color: #3a3f47; }
+body.dark .play:hover { background: #3a4a6b; }
+body.dark .btn-next { background: #33404f; color: #d7dde6; }
