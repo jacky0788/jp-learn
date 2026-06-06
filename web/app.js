@@ -381,9 +381,19 @@ if (!LESSONS.length) {
   renderActive();
 }
 
-// ---- 離線支援（Service Worker）----
+// ---- 離線支援（Service Worker）＋ 偵測到新版自動更新 ----
 if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing || !hadController) return;  // 首次安裝不重整，更新時才自動重整
+    refreshing = true;
+    location.reload();
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js").then(reg => {
+      reg.update();                            // 每次開啟主動檢查新版
+      setInterval(() => reg.update(), 60 * 60 * 1000);
+    }).catch(() => {});
   });
 }
