@@ -25,15 +25,16 @@ const settings = Object.assign(
 if (!settings.theme)
   settings.theme = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
 function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
+function numSet(key, def) { const v = Number(settings[key]); return (isFinite(v) && v >= 0) ? v : def; }
 function applyTheme() { document.body.classList.toggle("dark", settings.theme === "dark"); }
 applyTheme();
 
 function syncSettingsUI() {
   const d = document.getElementById("set-dark"); if (d) d.checked = settings.theme === "dark";
-  const r = document.getElementById("set-repeats"); if (r) r.value = settings.repeats;
-  const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = settings.repeatGap;
-  const g = document.getElementById("set-gap"); if (g) g.value = settings.gap;
-  const rt = document.getElementById("set-rate"); if (rt) rt.value = settings.rate;
+  const r = document.getElementById("set-repeats"); if (r) r.value = numSet("repeats", 3);
+  const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = numSet("repeatGap", 0.8);
+  const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
+  const rt = document.getElementById("set-rate"); if (rt) rt.value = numSet("rate", 0.9);
 }
 (function initSettings() {
   const panel = document.getElementById("settings-panel");
@@ -190,7 +191,7 @@ function speakTimes(text, times, done) {            // 連續朗讀同一字 tim
     const after = () => {
       if (!autoPlay.on) return;
       n++;
-      if (n < times) autoPlay.timer = setTimeout(step, (settings.repeatGap != null ? settings.repeatGap : 0.8) * 1000);
+      if (n < times) autoPlay.timer = setTimeout(step, numSet("repeatGap", 0.8) * 1000);
       else if (done) done();
     };
     u.onend = after; u.onerror = after;
@@ -221,7 +222,7 @@ function drawAuto() {
       autoPlay.idx++;
       if (autoPlay.idx >= autoPlay.deck.length) finishAuto();
       else drawAuto();
-    }, (settings.gap || 4) * 1000);
+    }, numSet("gap", 4) * 1000);
   });
 }
 function finishAuto() {
