@@ -20,7 +20,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, repeats: 3, gap: 4, rate: 0.9 },
+  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9 },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
   settings.theme = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
@@ -31,6 +31,7 @@ applyTheme();
 function syncSettingsUI() {
   const d = document.getElementById("set-dark"); if (d) d.checked = settings.theme === "dark";
   const r = document.getElementById("set-repeats"); if (r) r.value = settings.repeats;
+  const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = settings.repeatGap;
   const g = document.getElementById("set-gap"); if (g) g.value = settings.gap;
   const rt = document.getElementById("set-rate"); if (rt) rt.value = settings.rate;
 }
@@ -45,6 +46,8 @@ function syncSettingsUI() {
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
   const rep = document.getElementById("set-repeats");
   if (rep) rep.onchange = () => { settings.repeats = Math.max(1, Math.min(10, parseInt(rep.value) || 3)); saveSettings(); };
+  const rgap = document.getElementById("set-repeat-gap");
+  if (rgap) rgap.onchange = () => { settings.repeatGap = Math.max(0, Math.min(10, parseFloat(rgap.value) || 0.8)); saveSettings(); };
   const gap = document.getElementById("set-gap");
   if (gap) gap.onchange = () => { settings.gap = Math.max(1, Math.min(30, parseInt(gap.value) || 4)); saveSettings(); };
   const rate = document.getElementById("set-rate");
@@ -187,7 +190,7 @@ function speakTimes(text, times, done) {            // 連續朗讀同一字 tim
     const after = () => {
       if (!autoPlay.on) return;
       n++;
-      if (n < times) autoPlay.timer = setTimeout(step, 500);
+      if (n < times) autoPlay.timer = setTimeout(step, (settings.repeatGap != null ? settings.repeatGap : 0.8) * 1000);
       else if (done) done();
     };
     u.onend = after; u.onerror = after;
