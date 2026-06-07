@@ -335,12 +335,15 @@ function renderGrammar() {
 // ---- 測驗（單字中→日 + 練習題）----
 let quizPool = [], quizCur = null;
 
+const EX_ASK = { translate: "把中文翻成日文", fill: "填入正確形態", choice: "選出正確答案" };
 function buildQuizPool() {
   const pool = [];
   activeLessons().forEach(l => {
-    (l.vocab || []).forEach(v => { if (v.zh && v.jp) pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", tag: lessonLabel(l) }); });
-    (l.grammar || []).forEach(g => (g.practice || []).forEach(p => { if (p.q && p.a) pool.push({ q: p.q, a: p.a, sub: p.note || g.point || "", tag: lessonLabel(l) }); }));
-    (l.exercises || []).forEach(e => { if (e.q && e.a) pool.push({ q: e.q, a: e.a, sub: e.explain || "", tag: lessonLabel(l) }); });
+    (l.vocab || []).forEach(v => { if (v.zh && v.jp) pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", ask: "看中文，寫出日文單字", tag: lessonLabel(l) }); });
+    (l.grammar || []).forEach(g => (g.practice || []).forEach(p => {
+      if (p.q && p.a) pool.push({ q: p.q, a: p.a, sub: p.note || "", ask: g.point || "", tag: lessonLabel(l) });
+    }));
+    (l.exercises || []).forEach(e => { if (e.q && e.a) pool.push({ q: e.q, a: e.a, sub: e.explain || "", ask: EX_ASK[e.type] || "", tag: lessonLabel(l) }); });
   });
   return pool;
 }
@@ -357,6 +360,7 @@ function nextQuiz() {
   quizCur = quizPool[Math.floor(Math.random() * quizPool.length)];
   root.innerHTML = `
     <div class="ex-item">
+      ${quizCur.ask ? `<div class="quiz-ask">📝 考點：${quizCur.ask}</div>` : ""}
       <div class="quiz-q">${quizCur.q}<span class="tag">${quizCur.tag}</span></div>
       <input class="quiz-input" id="qin" placeholder="輸入日文答案後按 Enter…" autocomplete="off">
       <div class="quiz-ans" id="qans"></div>
