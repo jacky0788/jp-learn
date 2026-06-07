@@ -142,7 +142,7 @@ function renderIntro() {
 }
 
 // ---- 單字卡（含簡易間隔複習）----
-let deck = [], cardIdx = 0, flipped = false;
+let deck = [], cardIdx = 0, flipped = false, cardsView = "card";
 
 function vocabItems() {
   const items = [];
@@ -239,8 +239,32 @@ function renderCards() {
   const root = document.getElementById("cards");
   deck = buildDeck();
   if (!deck.length) { root.innerHTML = '<p class="empty">這些課還沒有單字資料。</p>'; return; }
+  if (cardsView === "list") { renderVocabList(); return; }
   cardIdx = 0; flipped = false;
   drawCard();
+}
+
+// ---- 全部單字清單（含例句）----
+function renderVocabList() {
+  const root = document.getElementById("cards");
+  const items = vocabItems();
+  root.innerHTML = `
+    <div class="auto-bar">
+      <button class="link" id="view-card">🃏 卡片模式</button>
+      <button class="link" id="list-auto">🔀 自動播放</button>
+      <span class="vcount">共 ${items.length} 個單字</span>
+    </div>
+    <div class="vocab-list">${items.map(v => `
+      <div class="vrow">
+        <div class="vhead"><span class="vjp">${v.jp || ""}</span> ${playBtn(v)}
+          <span class="vkana">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}</div>
+        <div class="vzh">${v.zh || ""}${v.note ? `　<span class="vnote">${v.note}</span>` : ""}</div>
+        ${v.ex ? `<div class="vex"><span class="vex-jp">${v.ex.jp || ""} ${playBtn(v.ex)}</span>
+          <span class="vex-kana">${v.ex.kana || ""}</span><span class="vex-zh">${v.ex.zh || ""}</span></div>` : ""}
+      </div>`).join("")}</div>`;
+  document.getElementById("view-card").onclick = () => { cardsView = "card"; renderCards(); };
+  document.getElementById("list-auto").onclick = startAuto;
+  root.querySelectorAll(".play").forEach(b => b.onclick = e => { e.stopPropagation(); speak(b.dataset.say); });
 }
 
 function drawCard() {
@@ -248,7 +272,8 @@ function drawCard() {
   const c = deck[cardIdx];
   const known = ST[c._id]?.score || 0;
   root.innerHTML = `
-    <div class="auto-bar"><button class="link" id="start-auto">🔀 自動播放此課單字（隨機・自動發音）</button></div>
+    <div class="auto-bar"><button class="link" id="start-auto">🔀 自動播放（隨機）</button>
+      <button class="link" id="view-list">📋 全部單字＋例句</button></div>
     <div class="flashcard" id="fc">
       <div class="jp">${c.jp || ""} ${playBtn(c)}</div>
       ${flipped ? `
@@ -271,6 +296,7 @@ function drawCard() {
 
   document.getElementById("fc").onclick = () => { flipped = !flipped; drawCard(); };
   document.getElementById("start-auto").onclick = startAuto;
+  document.getElementById("view-list").onclick = () => { cardsView = "list"; renderCards(); };
   document.getElementById("next").onclick = nextCard;
   const pb = root.querySelector(".play");
   if (pb) pb.onclick = e => { e.stopPropagation(); speak(pb.dataset.say); };

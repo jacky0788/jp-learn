@@ -47,6 +47,10 @@ vocab:                  # 單字（選填）
     source: 会話         # 選填：來源（同上）
     key: true           # 選填：重點
     note: "補充說明"      # 選填
+    ex:                 # 選填：例句（單字卡「全部單字」清單會顯示）
+      jp: "信号を渡ります。"
+      kana: "しんごうを わたります。"
+      zh: "看紅綠燈過馬路。"
 
 exercises:             # 練習題（選填）
   - type: fill         # fill 填空 / translate 翻譯 / choice 選擇

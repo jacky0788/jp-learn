@@ -29,6 +29,26 @@ header h1 { margin: 0 0 10px; font-size: 20px; }
 .set-row input[type=range] { width: 140px; }
 
 .auto-bar { text-align: center; margin-bottom: 12px; }
+.vcount { color: #888; font-size: 13px; margin-left: 8px; }
+.vocab-list { display: flex; flex-direction: column; gap: 10px; }
+.vrow { background: #fff; border-radius: 10px; padding: 12px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.vhead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.vjp { font-size: 22px; font-weight: 600; }
+.vkana { color: #666; font-size: 15px; }
+.vpos { font-size: 12px; color: #fff; background: #8a97ad; padding: 1px 8px; border-radius: 10px; }
+.vzh { color: #2b6cb0; font-size: 16px; margin-top: 2px; }
+.vnote { color: #888; font-size: 13px; }
+.vex { margin-top: 8px; padding: 8px 10px; background: #f4f7fb; border-left: 3px solid #cdd6e6; border-radius: 4px; }
+.vex-jp { font-size: 16px; display: inline-block; }
+.vex-kana { display: block; color: #777; font-size: 13px; }
+.vex-zh { display: block; color: #2b6cb0; font-size: 14px; }
+
+body.dark .vrow { background: #232831; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+body.dark .vjp { color: #f0f2f5; }
+body.dark .vkana, body.dark .vnote, body.dark .vex-kana { color: #aeb6c2; }
+body.dark .vzh, body.dark .vex-zh { color: #7fb6e6; }
+body.dark .vex { background: #1c2128; border-left-color: #3a3f47; }
+body.dark .vex-jp { color: #e8eaee; }
 .flashcard.auto { cursor: default; }
 
 body.dark .settings-box { background: #232831; color: #e3e6ea; }
