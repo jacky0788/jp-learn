@@ -130,7 +130,23 @@ document.querySelectorAll("nav button").forEach(b => {
   };
 });
 
+function setTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === tab));
+}
+
+function updateTabs() {
+  // 會話課不顯示「單字卡」（沒有單字）
+  const l = activeLessons()[0];
+  const hideCards = !l || (l._group === "会話");
+  const cardsBtn = document.querySelector('nav button[data-tab="cards"]');
+  if (cardsBtn) cardsBtn.style.display = hideCards ? "none" : "";
+  if (hideCards && currentTab === "cards") setTab("grammar");
+}
+
 function renderActive() {
+  updateTabs();
   if (currentTab === "intro") renderIntro();
   else if (currentTab === "cards") renderCards();
   else if (currentTab === "grammar") renderGrammar();
