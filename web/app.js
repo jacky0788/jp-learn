@@ -137,12 +137,21 @@ function setTab(tab) {
 }
 
 function updateTabs() {
-  // 會話課不顯示「單字卡」（沒有單字）
+  // 依內容決定要顯示哪些分頁（有單字才顯示單字卡、有文法才顯示文法…）
   const l = activeLessons()[0];
-  const hideCards = !l || (l._group === "会話");
-  const cardsBtn = document.querySelector('nav button[data-tab="cards"]');
-  if (cardsBtn) cardsBtn.style.display = hideCards ? "none" : "";
-  if (hideCards && currentTab === "cards") setTab("grammar");
+  const has = {
+    intro: !!(l && (l.intro || (l.goals || []).length || (l.notes || []).length)),
+    cards: !!(l && (l.vocab || []).length),
+    grammar: !!(l && (l.grammar || []).length),
+    quiz: !!(l && ((l.vocab || []).some(v => v.zh && v.jp)
+      || (l.grammar || []).some(g => (g.practice || []).length)
+      || (l.exercises || []).length))
+  };
+  ["intro", "cards", "grammar", "quiz"].forEach(t => {
+    const btn = document.querySelector(`nav button[data-tab="${t}"]`);
+    if (btn) btn.style.display = has[t] ? "" : "none";
+  });
+  if (!has[currentTab]) setTab(["intro", "grammar", "cards", "quiz"].find(t => has[t]) || "intro");
 }
 
 function renderActive() {
