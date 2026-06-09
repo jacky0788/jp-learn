@@ -18,40 +18,56 @@ except ImportError:
     sys.exit("缺少 PyYAML，請先執行：pip install pyyaml")
 
 ROOT = Path(__file__).resolve().parent.parent
-LESSONS_DIR = ROOT / "data" / "lessons"
-DECKS_DIR = ROOT / "data" / "decks"
+LESSONS_DIR = ROOT / "data" / "lessons"   # 文法課（依冊）
+KAIWA_DIR = ROOT / "data" / "kaiwa"       # 會話課（依主題）
 WEB_DIR = ROOT / "web"
 EXPORTS_DIR = ROOT / "exports"
 
 
 def load_lessons():
-    files = sorted(LESSONS_DIR.glob("*.yaml")) + sorted(DECKS_DIR.glob("*.yaml"))
-    lessons = []
-    for f in files:
-        with open(f, encoding="utf-8") as fp:
-            data = yaml.safe_load(fp)
-        if not data:
-            continue
-        data.setdefault("_file", f.name)
-        data.setdefault("vocab", [])
-        data.setdefault("grammar", [])
-        data.setdefault("exercises", [])
-        data.setdefault("notes", [])
-        data["_code"] = lesson_code(data)
-        lessons.append(data)
-    # 依冊、課排序
-    lessons.sort(key=lambda d: (d.get("book") or 0, d.get("lesson") or 0, d["_file"]))
-    return lessons
+    items = []
+    for f in sorted(LESSONS_DIR.glob("*.yaml")):
+        items.append(_load_one(f, "文法"))
+    for f in sorted(KAIWA_DIR.glob("*.yaml")):
+        items.append(_load_one(f, "会話"))
+    items = [d for d in items if d]
+    # 排序：文法課在前（依冊、課）→ 會話課在後（依 order）
+    items.sort(key=lambda d: (
+        0 if d["_group"] == "文法" else 1,
+        d.get("book") or 0, d.get("lesson") or 0, d.get("order") or 0, d["_file"]))
+    return items
 
 
-def lesson_code(data):
-    """產生顯示/標籤用代碼，例如 B1L01；無 book 時退回 L01。"""
+def _load_one(f, group):
+    with open(f, encoding="utf-8") as fp:
+        data = yaml.safe_load(fp)
+    if not data:
+        return None
+    # track 欄位可覆寫資料夾推斷
+    if data.get("track") in ("会話", "會話", "kaiwa"):
+        group = "会話"
+    elif data.get("track") in ("文法", "bunpou"):
+        group = "文法"
+    data["_file"] = f.name
+    data["_group"] = group
+    data.setdefault("vocab", [])
+    data.setdefault("grammar", [])
+    data.setdefault("exercises", [])
+    data.setdefault("notes", [])
+    data["_code"], data["_label"] = lesson_code(data, group)
+    return data
+
+
+def lesson_code(data, group):
+    """回傳 (唯一代碼, 顯示用短標籤)。文法＝B1L01；會話＝主題 slug＋短名。"""
     book, lesson = data.get("book"), data.get("lesson")
-    if lesson is None:
-        return data.get("title", data["_file"])
-    if book:
-        return "B%dL%02d" % (book, lesson)
-    return "L%02d" % lesson
+    if group == "文法" and lesson is not None:
+        code = ("B%dL%02d" % (book, lesson)) if book else ("L%02d" % lesson)
+        return code, code
+    # 會話：用 topic 當唯一鍵，label 短名顯示在選單
+    topic = data.get("topic") or data["_file"].rsplit(".", 1)[0]
+    label = data.get("label") or data.get("title") or topic
+    return "K-" + topic, label
 
 
 def tsv_escape(s):
@@ -117,7 +133,9 @@ def main():
     web_out = build_web(lessons)
     nv, ng = build_anki(lessons)
     total_vocab = sum(len(l["vocab"]) for l in lessons)
-    print("已載入 %d 課/牌組，單字 %d、文法 %d" % (len(lessons), total_vocab,
+    n_bun = sum(1 for l in lessons if l["_group"] == "文法")
+    n_kai = sum(1 for l in lessons if l["_group"] == "会話")
+    print("已載入 文法課 %d、會話課主題 %d；單字 %d、文法 %d" % (n_bun, n_kai, total_vocab,
           sum(len(l["grammar"]) for l in lessons)))
     print("  -> %s" % web_out.relative_to(ROOT))
     print("  -> exports/anki_vocab.tsv (%d 張)、exports/anki_grammar.tsv (%d 張)" % (nv, ng))

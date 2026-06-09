@@ -1,13 +1,16 @@
 // 本機日文複習 App。資料來自 data.js (window.LESSONS)。
 // 無需伺服器，直接用瀏覽器開 index.html 即可。
 
-const LESSONS = (window.LESSONS || []).slice().sort(
-  (a, b) => (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0));
+const groupRank = l => ((l._group || "文法") === "会話" ? 1 : 0);
+const LESSONS = (window.LESSONS || []).slice().sort((a, b) =>
+  groupRank(a) - groupRank(b) ||
+  (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0) ||
+  (a.order || 0) - (b.order || 0));
 const ST = JSON.parse(localStorage.getItem("jp_srs") || "{}"); // 熟練度記錄
 
 function save() { localStorage.setItem("jp_srs", JSON.stringify(ST)); }
 function lessonKey(l) { return l._code || l.title || l._file; }
-function lessonLabel(l) { return l._code || l.title || "?"; }
+function lessonLabel(l) { return l._label || l._code || l.title || "?"; }
 
 // 來源（文法／会話）與重點徽章
 function badges(item) {
@@ -80,27 +83,38 @@ function playBtn(ex) {
   return t ? `<button class="play" data-say="${escAttr(t)}" title="播放發音">🔊</button>` : "";
 }
 
-// ---- 選課狀態（一次只選一課，預設選最新的一課）----
-let selectedKey = LESSONS.length ? lessonKey(LESSONS[LESSONS.length - 1]) : null;
+// ---- 選課狀態（一次只選一課，預設選最新的文法課）----
+const bunpouLessons = LESSONS.filter(l => (l._group || "文法") === "文法");
+let selectedKey = (bunpouLessons.length ? lessonKey(bunpouLessons[bunpouLessons.length - 1])
+  : (LESSONS[0] ? lessonKey(LESSONS[0]) : null));
 
 function activeLessons() { return LESSONS.filter(l => lessonKey(l) === selectedKey); }
 
+const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"]];
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
   box.innerHTML = "";
-  LESSONS.forEach(l => {
-    const key = lessonKey(l);
-    const label = document.createElement("label");
-    label.className = key === selectedKey ? "on" : "";
-    label.textContent = lessonLabel(l);
-    label.onclick = () => {
-      if (key === selectedKey) return;   // 已選中就不重複處理
-      selectedKey = key;
-      cancelAuto();                       // 換課時停止自動播放
-      renderPicker();
-      renderActive();
-    };
-    box.appendChild(label);
+  GROUPS.forEach(([g, gname]) => {
+    const items = LESSONS.filter(l => (l._group || "文法") === g);
+    if (!items.length) return;
+    const head = document.createElement("span");
+    head.className = "pick-group";
+    head.textContent = gname;
+    box.appendChild(head);
+    items.forEach(l => {
+      const key = lessonKey(l);
+      const label = document.createElement("label");
+      label.className = key === selectedKey ? "on" : "";
+      label.textContent = lessonLabel(l);
+      label.onclick = () => {
+        if (key === selectedKey) return;
+        selectedKey = key;
+        cancelAuto();                     // 換課時停止自動播放
+        renderPicker();
+        renderActive();
+      };
+      box.appendChild(label);
+    });
   });
 }
 

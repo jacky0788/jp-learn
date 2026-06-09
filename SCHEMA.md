@@ -1,6 +1,19 @@
 # 資料格式說明（SCHEMA）
 
-每一課是一個 YAML 檔，放在 `data/lessons/`。
+## 兩條軌道
+
+課程分兩種來源，網頁選單分成「📘 文法課」「💬 會話課」兩區：
+
+- **文法課（依冊）**：放 `data/lessons/`，檔名 `B<冊>L<課>.yaml`（如 B3L02）。有 `book`+`lesson`。
+- **會話課（依主題）**：放 `data/kaiwa/`，一個文法一個檔。需要 `track: 会話`、`topic`（唯一 id）、
+  `order`（排序）、`label`（選單短名，如「んです」）、`title`。其餘欄位（intro/goals/grammar/vocab）同下。
+  範例見既有的 `data/kaiwa/ndesu.yaml`。
+
+> 匯入新內容時先講明這次是「文法」還是「會話」：文法→`data/lessons/B?L??.yaml`；會話→`data/kaiwa/<主題>.yaml`。
+
+---
+
+每一課是一個 YAML 檔，放在 `data/lessons/`（文法課）或 `data/kaiwa/`（會話課）。
 「來學日本語」是多冊系列、每冊各從第1課編到第10課，所以用**依冊編號**：
 檔名 `B<冊>L<課>.yaml`，例如 `B1L01.yaml`（第一冊第1課）、`B3L03.yaml`（第三冊第3課）。
 照片也放對應的 `raw/B1L01/`。
