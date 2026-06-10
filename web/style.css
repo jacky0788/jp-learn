@@ -73,6 +73,16 @@ nav button.active { background: #fff; color: #2b3a55; border-color: #fff; font-w
 }
 #lesson-checks label.on { background: #2b3a55; color: #fff; border-color: #2b3a55; }
 #lesson-checks input { display: none; }
+#lesson-search {
+  width: 100%; box-sizing: border-box; padding: 7px 12px; margin-bottom: 4px;
+  border: 1px solid #ccd2da; border-radius: 16px; font-size: 14px; outline: none;
+}
+#lesson-search:focus { border-color: #2b3a55; }
+.pick-empty { flex-basis: 100%; color: #8a97ad; font-size: 13px; padding: 6px 2px; }
+.vgrp {
+  font-size: 12px; color: #fff; background: #c2703a; padding: 1px 8px;
+  border-radius: 10px; font-weight: 600;
+}
 .link { background: none; border: none; color: #2b6cb0; cursor: pointer; font-size: 13px; }
 
 main { max-width: 820px; margin: 0 auto; padding: 20px; }
@@ -159,6 +169,8 @@ body.dark { background: #15171c; color: #e3e6ea; }
 body.dark #lesson-picker { background: #1f232a; border-bottom-color: #333a44; }
 body.dark #lesson-checks label { border-color: #3a3f47; color: #cdd6e6; }
 body.dark .pick-group { color: #99a2b0; }
+body.dark #lesson-search { background: #232831; border-color: #3a3f47; color: #e3e6ea; }
+body.dark .pick-empty { color: #99a2b0; }
 body.dark .link { color: #7fb6e6; }
 body.dark .flashcard,
 body.dark .intro-card,

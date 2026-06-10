@@ -92,12 +92,36 @@ let selectedKey = (bunpouLessons.length ? lessonKey(bunpouLessons[bunpouLessons.
 function activeLessons() { return LESSONS.filter(l => lessonKey(l) === selectedKey); }
 
 const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"], ["基礎", "📚 基礎文法"]];
+
+// ---- 搜尋：用關鍵字過濾課程／主題 ----
+let pickerQuery = "";
+function lessonHaystack(l) {
+  if (l._hay) return l._hay;
+  const parts = [l._label, l._code, l.title, l.intro];
+  (l.goals || []).forEach(x => parts.push(x));
+  (l.notes || []).forEach(x => parts.push(x));
+  (l.grammar || []).forEach(g => {
+    parts.push(g.point, g.explain);
+    (g.setsuzoku || []).forEach(s => parts.push(s));
+    (g.examples || []).forEach(e => parts.push(e.jp, e.kana, e.zh));
+  });
+  (l.vocab || []).forEach(v => parts.push(v.jp, v.kana, v.zh, v.pos));
+  l._hay = parts.filter(Boolean).join(" ").toLowerCase();
+  return l._hay;
+}
+function lessonMatches(l, q) {
+  return !q || lessonHaystack(l).includes(q);
+}
+
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
   box.innerHTML = "";
+  const q = pickerQuery.trim().toLowerCase();
+  let shown = 0;
   GROUPS.forEach(([g, gname]) => {
-    const items = LESSONS.filter(l => (l._group || "文法") === g);
+    const items = LESSONS.filter(l => (l._group || "文法") === g && lessonMatches(l, q));
     if (!items.length) return;
+    shown += items.length;
     const head = document.createElement("span");
     head.className = "pick-group";
     head.textContent = gname;
@@ -117,6 +141,18 @@ function renderPicker() {
       box.appendChild(label);
     });
   });
+  if (q && !shown) {
+    const empty = document.createElement("span");
+    empty.className = "pick-empty";
+    empty.textContent = "找不到符合「" + pickerQuery.trim() + "」的主題";
+    box.appendChild(empty);
+  }
+}
+
+function initSearch() {
+  const inp = document.getElementById("lesson-search");
+  if (!inp) return;
+  inp.oninput = () => { pickerQuery = inp.value; renderPicker(); };
 }
 
 // ---- 分頁 ----
@@ -297,7 +333,7 @@ function renderVocabList() {
     <div class="vocab-list">${items.map(v => `
       <div class="vrow">
         <div class="vhead"><span class="vjp">${v.jp || ""}</span> ${playBtn(v)}
-          <span class="vkana">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}</div>
+          <span class="vkana">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}${v._vgroup ? `<span class="vgrp">${v._vgroup}類</span>` : ""}</div>
         <div class="vzh">${v.zh || ""}${v.note ? `　<span class="vnote">${v.note}</span>` : ""}</div>
         ${v.ex ? `<div class="vex"><span class="vex-jp">${v.ex.jp || ""} ${playBtn(v.ex)}</span>
           <span class="vex-kana">${v.ex.kana || ""}</span><span class="vex-zh">${v.ex.zh || ""}</span></div>` : ""}
@@ -320,6 +356,7 @@ function drawCard() {
         <div class="kana">${c.kana || ""}</div>
         <div class="zh">${c.zh || ""}</div>
         ${c.pos ? `<div class="pos">${c.pos}</div>` : ""}
+        ${c._vgroup ? `<div class="pos"><span class="vgrp">${c._vgroup}類動詞</span></div>` : ""}
         ${c.note ? `<div class="pos">${c.note}</div>` : ""}
         ${(c.source || c.key) ? `<div class="pos">${badges(c)}</div>` : ""}
       ` : `<div class="hint">點一下看答案 · ${c._lesson} · 熟練度 ${known}</div>`}
@@ -451,6 +488,7 @@ if (!LESSONS.length) {
   document.querySelector("main").innerHTML =
     '<p class="empty">還沒有資料。請先執行 <code>python scripts/build.py</code> 生成 data.js。</p>';
 } else {
+  initSearch();
   renderPicker();
   renderActive();
 }

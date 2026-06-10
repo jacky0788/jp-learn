@@ -45,6 +45,59 @@ def load_lessons():
     return items
 
 
+# 「る」結尾卻是五段（第I類）的常見例外動詞（辭書形假名）
+GODAN_RU_EXCEPTIONS = {
+    "かえる", "はしる", "はいる", "いる", "しる", "きる", "しゃべる", "へる",
+    "まいる", "かぎる", "ちる", "ける", "あせる", "ねる",  # ねる(練る)等少數；寝る另判
+    "すべる", "にぎる", "かじる", "よみがえる",
+}
+_II_PRECEDING = set("いきしちにひみりぎじびぴゃゅょぃ"  # イ段
+                    "えけせてねへめれげぜべぺ")          # エ段
+
+
+def classify_verb(kana):
+    """由辭書形假名粗略判定動詞類別 I/II/III（無法判定回 None）。
+    注意：本專案單字多以「ます形」儲存，ます形無法可靠分辨 I/II，故保守處理：
+    〜します→III（可靠），其他ます形一律不猜（回 None），交由 pos 明確標示。"""
+    if not kana:
+        return None
+    k = kana.strip()
+    if k in ("する", "くる", "来る") or k.endswith("する"):
+        return "III"
+    if k.endswith("します"):
+        return "III"
+    if k.endswith("ます") or k.endswith("ません"):
+        return None
+    if k.endswith("る") and len(k) >= 2:
+        if k in GODAN_RU_EXCEPTIONS:
+            return "I"
+        return "II" if k[-2] in _II_PRECEDING else "I"
+    if k[-1] in "うくぐすつぬぶむ":
+        return "I"
+    return None
+
+
+def verb_group(v):
+    """回傳單字的動詞類別 I/II/III；非動詞回 None。
+    優先讀 pos 內標示（動詞I/II/III、五段/一段/變格），否則由辭書形自動判定。"""
+    pos = str(v.get("pos") or "")
+    if v.get("vgroup"):
+        return str(v["vgroup"]).replace("1", "I").replace("2", "II").replace("3", "III")
+    if "動詞" not in pos and "动词" not in pos:
+        return None
+    m = re.search(r"(III|II|I|Ⅲ|Ⅱ|Ⅰ|３|２|１|3|2|1)", pos)
+    if m:
+        return {"Ⅰ": "I", "Ⅱ": "II", "Ⅲ": "III", "１": "I", "２": "II", "３": "III",
+                "1": "I", "2": "II", "3": "III"}.get(m.group(1), m.group(1))
+    if "一段" in pos:
+        return "II"
+    if "五段" in pos:
+        return "I"
+    if "変格" in pos or "變格" in pos or "サ変" in pos or "カ変" in pos:
+        return "III"
+    return classify_verb(v.get("kana") or v.get("jp"))
+
+
 def _load_one(f, group):
     with open(f, encoding="utf-8") as fp:
         data = yaml.safe_load(fp)
@@ -63,6 +116,12 @@ def _load_one(f, group):
     data.setdefault("grammar", [])
     data.setdefault("exercises", [])
     data.setdefault("notes", [])
+    # 自動為動詞單字標上類別 I/II/III（給網頁顯示徽章用）
+    for v in data["vocab"]:
+        if isinstance(v, dict):
+            g = verb_group(v)
+            if g:
+                v["_vgroup"] = g
     data["_code"], data["_label"] = lesson_code(data, group)
     return data
 
