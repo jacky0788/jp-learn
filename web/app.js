@@ -24,7 +24,8 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9 },
+  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9,
+    radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioScope: "kaiwa" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
   settings.theme = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
@@ -209,6 +210,7 @@ function updateTabs() {
       || (l.grammar || []).some(g => (g.practice || []).length)
       || (l.exercises || []).length))
   };
+  has.radio = true;   // 廣播是跨課的獨立區塊，永遠顯示
   ["intro", "cards", "grammar", "quiz"].forEach(t => {
     const btn = document.querySelector(`nav button[data-tab="${t}"]`);
     if (btn) btn.style.display = has[t] ? "" : "none";
@@ -217,10 +219,12 @@ function updateTabs() {
 }
 
 function renderActive() {
+  if (currentTab !== "radio") stopRadio();   // 離開廣播分頁就停止播放
   updateTabs();
   if (currentTab === "intro") renderIntro();
   else if (currentTab === "cards") renderCards();
   else if (currentTab === "grammar") renderGrammar();
+  else if (currentTab === "radio") renderRadio();
   else renderQuiz();
 }
 
@@ -590,6 +594,145 @@ function renderQuizList() {
   const list = document.getElementById("quizlist");
   document.getElementById("quiz-toggle").onclick = () => list.classList.toggle("show-ans");
   list.querySelectorAll("li").forEach(li => li.onclick = () => li.classList.toggle("revealed"));
+}
+
+// ---- 🎧 廣播聽力（連續朗讀，邊運動邊聽）----
+const radio = { on: false, deck: [], idx: 0, timer: null, tick: null, endAt: 0, wake: null, now: null };
+
+function radioScopeLessons() {
+  const s = settings.radioScope;
+  if (s === "topic") return activeLessons();
+  if (s === "all") return LESSONS;
+  return LESSONS.filter(l => (l._group || "文法") === "会話");   // 預設：全部會話
+}
+function buildRadioPool() {
+  const pool = [];
+  radioScopeLessons().forEach(l => {
+    const tag = lessonLabel(l);
+    (l.grammar || []).forEach(g => (g.examples || []).forEach(ex => { if (ex.jp) pool.push({ jp: ex.jp, kana: ex.kana, zh: ex.zh, tag }); }));
+    (l.vocab || []).forEach(v => { if (v.ex && v.ex.jp) pool.push({ jp: v.ex.jp, kana: v.ex.kana, zh: v.ex.zh, tag }); });
+  });
+  return pool;
+}
+
+async function reqWake() { try { if (navigator.wakeLock) radio.wake = await navigator.wakeLock.request("screen"); } catch (e) { } }
+function relWake() { try { if (radio.wake) radio.wake.release(); } catch (e) { } radio.wake = null; }
+
+function stopRadio() {
+  radio.on = false;
+  if (radio.timer) { clearTimeout(radio.timer); radio.timer = null; }
+  if (radio.tick) { clearInterval(radio.tick); radio.tick = null; }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  relWake();
+}
+
+function speakSeq(parts, done) {
+  if (!window.speechSynthesis || !parts.length) { if (done) done(); return; }
+  let i = 0;
+  const step = () => {
+    if (!radio.on) return;
+    if (i >= parts.length) { if (done) done(); return; }
+    const p = parts[i++];
+    const u = new SpeechSynthesisUtterance(p.text);
+    u.lang = p.lang; u.rate = settings.rate || 0.9;
+    if (p.lang.indexOf("ja") === 0) { const v = jaVoice(); if (v) u.voice = v; }
+    u.onend = () => { if (radio.on) step(); };
+    u.onerror = () => { if (radio.on) step(); };
+    speechSynthesis.speak(u);
+  };
+  step();
+}
+
+function fmtMMSS(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function radioRemain() { const el = document.getElementById("radio-remain"); if (el) el.textContent = "剩餘 " + fmtMMSS(radio.endAt - Date.now()); }
+
+function startRadio() {
+  const pool = buildRadioPool();
+  if (!pool.length) { renderRadio(); return; }
+  stopRadio();
+  radio.deck = shuffle(pool); radio.idx = 0; radio.on = true;
+  radio.endAt = Date.now() + numSet("radioMins", 20) * 60000;
+  reqWake();
+  renderRadio();                                   // 切換成「播放中」畫面
+  radio.tick = setInterval(() => {
+    radioRemain();
+    if (window.speechSynthesis && radio.on) { try { speechSynthesis.resume(); } catch (e) { } } // 防部分瀏覽器中斷
+  }, 1000);
+  radioStep();
+}
+
+function radioStep() {
+  if (!radio.on) return;
+  if (Date.now() >= radio.endAt) { finishRadio(); return; }
+  const it = radio.deck[radio.idx % radio.deck.length];
+  radio.now = it;
+  drawRadioNow(it);
+  const reps = Math.max(1, Math.round(numSet("radioRepeat", 2)));
+  const parts = [];
+  const ja = sayText(it);
+  for (let k = 0; k < reps; k++) parts.push({ text: ja, lang: "ja-JP" });
+  if (settings.radioZh && it.zh) parts.push({ text: it.zh, lang: "zh-TW" });
+  speakSeq(parts, () => {
+    if (!radio.on) return;
+    radio.timer = setTimeout(() => { if (!radio.on) return; radio.idx++; radioStep(); }, numSet("radioGap", 1.5) * 1000);
+  });
+}
+
+function finishRadio() {
+  stopRadio();
+  const root = document.getElementById("radio");
+  const card = root.querySelector(".radio-now");
+  if (card) card.innerHTML = `<p class="empty">✅ 播放結束（${numSet("radioMins", 20)} 分鐘）！辛苦了～</p>`;
+  const btn = document.getElementById("radio-toggle");
+  if (btn) { btn.textContent = "▶ 開始播放"; btn.classList.remove("on"); }
+}
+
+function drawRadioNow(it) {
+  const el = document.querySelector("#radio .radio-now");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="rn-tag">${it.tag || ""}</div>
+    <div class="rn-jp">${it.jp || ""}</div>
+    <div class="rn-kana">${it.kana || ""}</div>
+    <div class="rn-zh">${settings.radioZh ? (it.zh || "") : ""}</div>`;
+}
+
+const RADIO_MINS = [15, 20, 30];
+function renderRadio() {
+  const root = document.getElementById("radio");
+  const scope = settings.radioScope;
+  const scopeBtn = (v, label) => `<button class="seg ${scope === v ? "on" : ""}" data-scope="${v}">${label}</button>`;
+  const minBtn = m => `<button class="seg ${numSet("radioMins", 20) === m ? "on" : ""}" data-min="${m}">${m}分</button>`;
+  root.innerHTML = `
+    <div class="radio-box">
+      <div class="radio-hint">🎧 連續朗讀例句，邊運動邊聽。建議讓螢幕保持開啟（已自動嘗試防鎖屏）。</div>
+      <div class="set-section">範圍</div>
+      <div class="seg-row">${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("topic", "目前主題")}${scopeBtn("all", "📚 全部")}</div>
+      <div class="set-section">播放時間</div>
+      <div class="seg-row">${RADIO_MINS.map(minBtn).join("")}
+        <label class="radio-custom">自訂 <input type="number" id="radio-mins" min="1" max="120" step="1" value="${numSet("radioMins", 20)}"> 分</label></div>
+      <div class="set-section">播放設定</div>
+      <label class="set-row"><span>每句日文重複次數</span><input type="number" id="radio-rep" min="1" max="5" step="1" value="${numSet("radioRepeat", 2)}"></label>
+      <label class="set-row"><span>每句之間間隔（秒）</span><input type="number" id="radio-gap" min="0" max="10" step="0.5" value="${numSet("radioGap", 1.5)}"></label>
+      <label class="set-row"><span>日文後也唸中文</span><input type="checkbox" id="radio-zh" ${settings.radioZh ? "checked" : ""}></label>
+      <div class="controls">
+        <button class="btn-good ${radio.on ? "on" : ""}" id="radio-toggle">${radio.on ? "⏹ 停止" : "▶ 開始播放"}</button>
+        <span id="radio-remain" class="vcount">${radio.on ? "剩餘 " + fmtMMSS(radio.endAt - Date.now()) : ""}</span>
+      </div>
+      <div class="radio-now">${radio.on && radio.now ? "" : '<p class="empty">設定好按「開始播放」，就能一直聽下去 🎶</p>'}</div>
+    </div>`;
+  if (radio.on && radio.now) drawRadioNow(radio.now);
+  root.querySelectorAll("[data-scope]").forEach(b => b.onclick = () => { settings.radioScope = b.dataset.scope; saveSettings(); renderRadio(); });
+  root.querySelectorAll("[data-min]").forEach(b => b.onclick = () => { settings.radioMins = +b.dataset.min; saveSettings(); renderRadio(); });
+  const mins = document.getElementById("radio-mins");
+  mins.onchange = () => { settings.radioMins = Math.max(1, +mins.value || 20); saveSettings(); renderRadio(); };
+  document.getElementById("radio-rep").onchange = e => { settings.radioRepeat = Math.max(1, +e.target.value || 2); saveSettings(); };
+  document.getElementById("radio-gap").onchange = e => { settings.radioGap = Math.max(0, +e.target.value || 1.5); saveSettings(); };
+  document.getElementById("radio-zh").onchange = e => { settings.radioZh = e.target.checked; saveSettings(); };
+  document.getElementById("radio-toggle").onclick = () => { if (radio.on) { stopRadio(); renderRadio(); } else startRadio(); };
 }
 
 // ---- 啟動 ----
