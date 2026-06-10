@@ -162,6 +162,9 @@ function lessonMatches(l, q) {
 
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem("jp_collapsed") || "[]"));
 function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([...collapsedGroups])); }
+// 子分類收合（短文章／長文章 預設收起）
+let collapsedSubs = new Set(JSON.parse(localStorage.getItem("jp_subcollapsed") || '["文章:短文章","文章:長文章"]'));
+function saveSubs() { localStorage.setItem("jp_subcollapsed", JSON.stringify([...collapsedSubs])); }
 
 function pickerLabel(l) {   // 文章選單只顯示日文標題（去掉中文括號），讓藥丸更短
   if (l._article) { const t = (l._label || "").replace(/（[^）]*）/g, "").trim(); return t || l._label; }
@@ -189,21 +192,34 @@ function subHeader(box, text) {
   sh.textContent = text;
   box.appendChild(sh);
 }
-function renderGroupBody(box, g, items) {
-  if (g === "文法") {                       // 依冊分組
+function renderGroupBody(box, g, items, forceOpen) {
+  // 可收合的子分類
+  const sub = (key, text, arr) => {
+    if (!arr.length) return;
+    const collapsed = !forceOpen && collapsedSubs.has(key);
+    const h = document.createElement("button");
+    h.className = "pick-subgroup sub-toggle" + (collapsed ? " collapsed" : "");
+    h.innerHTML = `<span class="caret">${collapsed ? "▶" : "▼"}</span> ${text}`;
+    h.onclick = () => {
+      if (collapsedSubs.has(key)) collapsedSubs.delete(key); else collapsedSubs.add(key);
+      saveSubs(); renderPicker();
+    };
+    box.appendChild(h);
+    if (!collapsed) arr.forEach(l => appendLabel(box, l));
+  };
+  if (g === "文法") {                       // 依冊分組（預設展開）
     const books = [...new Set(items.map(l => l.book || 0))].sort((a, b) => a - b);
     books.forEach(bk => {
-      if (books.length > 1) subHeader(box, bk ? `第${bk}冊` : "其他");
-      items.filter(l => (l.book || 0) === bk).forEach(l => appendLabel(box, l));
+      const arr = items.filter(l => (l.book || 0) === bk);
+      if (books.length > 1) sub("文法:" + bk, bk ? `第${bk}冊` : "其他", arr);
+      else arr.forEach(l => appendLabel(box, l));
     });
-  } else if (g === "文章") {                 // 廣播在最前，再分 短／長文章
+  } else if (g === "文章") {                 // 廣播在最前，短／長文章預設收合
     items.filter(l => l._radio).forEach(l => appendLabel(box, l));
-    [["短文章", a => !isLongArticle(a)], ["長文章", a => isLongArticle(a)]].forEach(([name, pred]) => {
-      const sub = items.filter(l => l._article && pred(l._article));
-      if (!sub.length) return;
-      subHeader(box, name + "（" + sub.length + "）");
-      sub.forEach(l => appendLabel(box, l));
-    });
+    sub("文章:短文章", "短文章（" + items.filter(l => l._article && !isLongArticle(l._article)).length + "）",
+      items.filter(l => l._article && !isLongArticle(l._article)));
+    sub("文章:長文章", "長文章（" + items.filter(l => l._article && isLongArticle(l._article)).length + "）",
+      items.filter(l => l._article && isLongArticle(l._article)));
   } else {
     items.forEach(l => appendLabel(box, l));
   }
@@ -223,7 +239,7 @@ function renderPicker() {
       if (!items.length) return;
       shown += items.length;
       subHeader(list, gname);
-      renderGroupBody(list, g, items);
+      renderGroupBody(list, g, items, true);
     });
     if (!shown) {
       const empty = document.createElement("span");
