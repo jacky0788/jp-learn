@@ -46,7 +46,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9,
+  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1,
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -62,6 +62,7 @@ function syncSettingsUI() {
   const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = numSet("repeatGap", 0.8);
   const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
   const rt = document.getElementById("set-rate"); if (rt) rt.value = numSet("rate", 0.9);
+  const vol = document.getElementById("set-volume"); if (vol) vol.value = Math.round(numSet("volume", 1) * 100);
 }
 (function initSettings() {
   const panel = document.getElementById("settings-panel");
@@ -80,6 +81,8 @@ function syncSettingsUI() {
   if (gap) gap.onchange = () => { settings.gap = Math.max(1, Math.min(30, parseInt(gap.value) || 4)); saveSettings(); };
   const rate = document.getElementById("set-rate");
   if (rate) rate.onchange = () => { settings.rate = parseFloat(rate.value) || 0.9; saveSettings(); };
+  const vol = document.getElementById("set-volume");
+  if (vol) vol.oninput = () => { settings.volume = Math.max(0, Math.min(1, (parseInt(vol.value) || 0) / 100)); saveSettings(); };
 })();
 
 // 廣播在「📖 文章」群組裡（選 🎧 項目→主畫面顯示播放器）。播放中可切到別課，背景續播。
@@ -99,7 +102,7 @@ function speak(text) {
   if (!window.speechSynthesis || !text) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "ja-JP"; u.rate = settings.rate || 0.9;
+  u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
   const v = jaVoice(); if (v) u.voice = v;
   speechSynthesis.speak(u);
 }
@@ -347,7 +350,7 @@ function speakTimes(text, times, done) {            // 連續朗讀同一字 tim
   const step = () => {
     if (!autoPlay.on) return;
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "ja-JP"; u.rate = settings.rate || 0.9;
+    u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
     const v = jaVoice(); if (v) u.voice = v;
     const after = () => {
       if (!autoPlay.on) return;
@@ -699,7 +702,7 @@ function readerStep() {
   const s = body[reader.idx];
   highlightRead(reader.idx);
   const u = new SpeechSynthesisUtterance(sayText(s));
-  u.lang = "ja-JP"; u.rate = settings.rate || 0.9;
+  u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
   const v = jaVoice(); if (v) u.voice = v;
   u.onend = () => { if (reader.on) { reader.idx++; setTimeout(() => { if (reader.on) readerStep(); }, 350); } };
   u.onerror = () => { if (reader.on) { reader.idx++; readerStep(); } };
@@ -789,7 +792,7 @@ function speakSeq(parts, done) {
     if (i >= parts.length) { if (done) done(); return; }
     const p = parts[i++];
     const u = new SpeechSynthesisUtterance(p.text);
-    u.lang = p.lang; u.rate = settings.rate || 0.9;
+    u.lang = p.lang; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
     if (p.lang.indexOf("ja") === 0) { const v = jaVoice(); if (v) u.voice = v; }
     u.onend = () => { if (radio.on) step(); };
     u.onerror = () => { if (radio.on) step(); };
