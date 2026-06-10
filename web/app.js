@@ -370,31 +370,39 @@ function buildDeck() {
 }
 
 // ---- 自動隨機播放 ----
-const autoPlay = { on: false, deck: [], idx: 0, timer: null };
-function cancelAuto() {
-  autoPlay.on = false;
+const autoPlay = { on: false, paused: false, deck: [], idx: 0, timer: null, seq: 0 };
+function clearAutoTimers() {
   if (autoPlay.timer) { clearTimeout(autoPlay.timer); autoPlay.timer = null; }
   if (window.speechSynthesis) speechSynthesis.cancel();
 }
+function cancelAuto() { autoPlay.on = false; autoPlay.paused = false; autoPlay.seq++; clearAutoTimers(); }
 function startAuto() {
   const items = vocabItems();
   if (!items.length) return;
   cancelAuto();
-  autoPlay.deck = shuffle(items); autoPlay.idx = 0; autoPlay.on = true;
+  autoPlay.deck = shuffle(items); autoPlay.idx = 0; autoPlay.on = true; autoPlay.paused = false;
   drawAuto();
 }
 function stopAuto() { cancelAuto(); renderCards(); }
+function pauseAuto() { autoPlay.paused = true; autoPlay.seq++; clearAutoTimers(); drawAuto(); }   // 暫停（不前進）
+function resumeAuto() { autoPlay.paused = false; drawAuto(); }                                    // 繼續（重聽目前字）
+function nextAuto() {
+  autoPlay.paused = false; autoPlay.seq++; clearAutoTimers();
+  autoPlay.idx++;
+  if (autoPlay.idx >= autoPlay.deck.length) finishAuto(); else drawAuto();
+}
 function speakTimes(text, times, done) {            // 連續朗讀同一字 times 次
   if (!window.speechSynthesis || !text) { if (done) done(); return; }
+  const mySeq = autoPlay.seq;
   speechSynthesis.cancel();
   let n = 0;
   const step = () => {
-    if (!autoPlay.on) return;
+    if (autoPlay.seq !== mySeq || !autoPlay.on) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
     const v = jaVoice(); if (v) u.voice = v;
     const after = () => {
-      if (!autoPlay.on) return;
+      if (autoPlay.seq !== mySeq || !autoPlay.on) return;
       n++;
       if (n < times) autoPlay.timer = setTimeout(step, numSet("repeatGap", 0.8) * 1000);
       else if (done) done();
@@ -414,16 +422,28 @@ function drawAuto() {
       <div class="zh">${c.zh || ""}</div>
       ${c.pos ? `<div class="pos">${c.pos}</div>` : ""}
     </div>
-    <div class="controls"><button class="btn-bad" id="auto-stop">■ 停止</button></div>
-    <div class="progress">🔀 自動播放（隨機）　${autoPlay.idx + 1} / ${autoPlay.deck.length}　·　${c._lesson}</div>`;
-  document.getElementById("auto-stop").onclick = stopAuto;
+    <div class="controls">
+      ${autoPlay.paused
+      ? `<button class="btn-good" id="auto-resume">▶ 繼續</button>`
+      : `<button class="btn-next" id="auto-pause">⏸ 暫停</button>`}
+      <button class="btn-next" id="auto-next">下一個 →</button>
+      <button class="btn-bad" id="auto-stop">■ 停止</button>
+    </div>
+    <div class="progress">🔀 自動播放（隨機）　${autoPlay.idx + 1} / ${autoPlay.deck.length}　·　${c._lesson}${autoPlay.paused ? "　·　⏸ 已暫停" : ""}</div>`;
   const pb = root.querySelector(".play");
   if (pb) pb.onclick = e => { e.stopPropagation(); speak(pb.dataset.say); };
-  // 朗讀 N 次 → 等待 gap 秒 → 下一個
+  document.getElementById("auto-stop").onclick = stopAuto;
+  document.getElementById("auto-next").onclick = nextAuto;
+  const pauseBtn = document.getElementById("auto-pause");
+  if (pauseBtn) pauseBtn.onclick = pauseAuto;
+  const resumeBtn = document.getElementById("auto-resume");
+  if (resumeBtn) resumeBtn.onclick = resumeAuto;
+  if (autoPlay.paused) return;                       // 暫停時不朗讀，可按🔊重聽或按繼續
+  const seq = ++autoPlay.seq;
   speakTimes(sayText(c), settings.repeats, () => {
-    if (!autoPlay.on) return;
+    if (autoPlay.seq !== seq || !autoPlay.on) return;
     autoPlay.timer = setTimeout(() => {
-      if (!autoPlay.on) return;
+      if (autoPlay.seq !== seq || !autoPlay.on) return;
       autoPlay.idx++;
       if (autoPlay.idx >= autoPlay.deck.length) finishAuto();
       else drawAuto();
