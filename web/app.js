@@ -46,7 +46,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1,
+  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -718,6 +718,9 @@ function renderArticle() {
   const l = activeLessons()[0];
   if (!l || !l._article) { root.innerHTML = '<p class="empty">請在上方「📖 文章」選一篇文章。</p>'; return; }
   const a = l._article;
+  const show = settings.readShow || "all";
+  const showCls = show === "jp" ? "hide-zh" : (show === "jpzh" ? "hide-kana" : "");
+  const showBtn = (v, label) => `<button class="seg ${show === v ? "on" : ""}" data-show="${v}">${label}</button>`;
   root.innerHTML = `
     <div class="read-head">
       <h2>${a.title || ""} ${a.level ? `<span class="lv">${a.level}</span>` : ""}</h2>
@@ -728,9 +731,10 @@ function renderArticle() {
         <button class="link" id="read-fav">${inPlaylist(a) ? "★ 已在廣播清單" : "☆ 加入廣播清單"}</button>
         <span class="read-done"></span>
       </div>
+      <div class="seg-row read-show">顯示：${showBtn("all", "日＋假名＋中")}${showBtn("jpzh", "日＋中")}${showBtn("jp", "日＋假名")}</div>
       <div class="read-hint">點任一句可從那句開始朗讀；朗讀時會高亮目前句子。</div>
     </div>
-    <div class="read-body">
+    <div class="read-body ${showCls}">
       ${(a.body || []).map((s, i) => `<p class="rsent" id="rs${i}" data-i="${i}">
         <span class="rs-jp">${s.jp || ""}</span>
         <span class="rs-kana">${s.kana || ""}</span>
@@ -740,6 +744,13 @@ function renderArticle() {
   document.getElementById("read-cont").onchange = e => { reader.continuous = e.target.checked; };
   const fav = document.getElementById("read-fav");
   if (fav) fav.onclick = () => { togglePlaylist(a); fav.textContent = inPlaylist(a) ? "★ 已在廣播清單" : "☆ 加入廣播清單"; };
+  root.querySelectorAll("[data-show]").forEach(b => b.onclick = () => {
+    settings.readShow = b.dataset.show; saveSettings();
+    const rb = root.querySelector(".read-body");
+    rb.classList.toggle("hide-zh", b.dataset.show === "jp");
+    rb.classList.toggle("hide-kana", b.dataset.show === "jpzh");
+    root.querySelectorAll("[data-show]").forEach(x => x.classList.toggle("on", x === b));
+  });
   root.querySelectorAll(".rsent").forEach(p => p.onclick = () => { stopReader(); startReader(+p.dataset.i); });
   if (reader.on && reader.art === a) highlightRead(reader.idx);
 }
