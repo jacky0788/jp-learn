@@ -10,6 +10,8 @@
 """
 import sys
 import json
+import re
+import hashlib
 from pathlib import Path
 
 try:
@@ -103,6 +105,32 @@ def build_web(lessons):
     return out
 
 
+def stamp_version():
+    """以內容雜湊當版本號，自動寫進 index.html(?v=) 與 sw.js(CACHE)。
+    版本只在 data.js/app.js/style.css 內容變動時才改 → 不用手動 bump，也不會漏改造成快取不更新。"""
+    assets = []
+    for name in ("data.js", "app.js", "style.css"):
+        p = WEB_DIR / name
+        if p.exists():
+            assets.append(p.read_bytes())
+    ver = hashlib.sha1(b"".join(assets)).hexdigest()[:8]
+
+    idx = WEB_DIR / "index.html"
+    if idx.exists():
+        html = idx.read_text(encoding="utf-8")
+        html = re.sub(r'(style\.css|app\.js|data\.js)\?v=[^"\']*',
+                      lambda m: "%s?v=%s" % (m.group(1), ver), html)
+        idx.write_text(html, encoding="utf-8")
+
+    sw = WEB_DIR / "sw.js"
+    if sw.exists():
+        swtext = sw.read_text(encoding="utf-8")
+        swtext = re.sub(r'(const CACHE = "jp-learn-)[^"]*(")',
+                        lambda m: m.group(1) + ver + m.group(2), swtext)
+        sw.write_text(swtext, encoding="utf-8")
+    return ver
+
+
 def build_anki(lessons):
     EXPORTS_DIR.mkdir(exist_ok=True)
     vocab_rows, grammar_rows = [], []
@@ -139,6 +167,7 @@ def main():
     if not lessons:
         sys.exit("找不到任何課程資料（data/lessons/*.yaml）")
     web_out = build_web(lessons)
+    ver = stamp_version()
     nv, ng = build_anki(lessons)
     total_vocab = sum(len(l["vocab"]) for l in lessons)
     n_bun = sum(1 for l in lessons if l["_group"] == "文法")
@@ -147,7 +176,7 @@ def main():
     print("已載入 文法課 %d、會話課主題 %d、基礎文法 %d；單字 %d、文法 %d" % (
           n_bun, n_kai, n_kis, total_vocab,
           sum(len(l["grammar"]) for l in lessons)))
-    print("  -> %s" % web_out.relative_to(ROOT))
+    print("  -> %s（版本 %s 已自動戳印到 index.html／sw.js）" % (web_out.relative_to(ROOT), ver))
     print("  -> exports/anki_vocab.tsv (%d 張)、exports/anki_grammar.tsv (%d 張)" % (nv, ng))
     print("\n複習網頁：用瀏覽器開啟 web/index.html")
     print("Anki：匯入 exports/*.tsv（匯入時欄位選 製表符 / Tab 分隔）")
