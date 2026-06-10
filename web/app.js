@@ -399,7 +399,29 @@ function grade(c, delta) {
   if (cardIdx >= deck.length) { renderCards(); } else { drawCard(); }
 }
 
-// ---- 文法（講義版面：接続 / 説明 / 例 / 練習）----
+// ---- 圖解表格（cell 支援 [x] 標色變化處、{{漢字|假名}} ruby 注音）----
+function escHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function cellHtml(s) {
+  let t = escHtml(s);
+  t = t.replace(/\{\{([^|{}]+)\|([^{}]+)\}\}/g, "<ruby>$1<rt>$2</rt></ruby>"); // ruby
+  t = t.replace(/\[([^\]]+)\]/g, '<span class="hl">$1</span>');               // 標色
+  return t;
+}
+function tableHtml(tb) {
+  if (!tb || !tb.rows || !tb.rows.length) return "";
+  const head = (tb.headers && tb.headers.length)
+    ? `<thead><tr>${tb.headers.map(h => `<th>${cellHtml(h)}</th>`).join("")}</tr></thead>` : "";
+  const body = `<tbody>${tb.rows.map(r =>
+    `<tr>${r.map(c => `<td>${cellHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+  const cap = tb.caption ? `<caption>${cellHtml(tb.caption)}</caption>` : "";
+  return `<div class="block"><span class="blabel">圖解</span>
+    <div class="gtable-wrap"><table class="gtable">${cap}${head}${body}</table></div></div>`;
+}
+
+// ---- 文法（講義版面：接続 / 説明 / 圖解 / 例 / 練習）----
 function renderGrammar() {
   const root = document.getElementById("grammar");
   const ls = activeLessons().filter(l => (l.grammar || []).length);
@@ -413,6 +435,7 @@ function renderGrammar() {
         html += `<div class="block"><span class="blabel">接続</span><ul class="setsuzoku">${g.setsuzoku.map(s => `<li>${s}</li>`).join("")}</ul></div>`;
       if (g.explain)
         html += `<div class="block"><span class="blabel">説明</span><div class="explain">${mdParagraphs(g.explain)}</div></div>`;
+      if (g.table) html += tableHtml(g.table);
       if (g.examples && g.examples.length)
         html += `<div class="block"><span class="blabel">例</span>${g.examples.map(ex => `
           <div class="example"><div class="jp">${ex.jp || ""} ${playBtn(ex)}</div><div class="kana">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
