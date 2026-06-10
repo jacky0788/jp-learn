@@ -74,9 +74,22 @@ function speak(text) {
   const v = jaVoice(); if (v) u.voice = v;
   speechSynthesis.speak(u);
 }
-function sayText(ex) {                       // 朗讀用文字：優先假名，去掉【】與箭頭
-  return String(ex.kana || ex.jp || "").replace(/【[^】]*】/g, "").replace(/[→⇒]/g, "、").trim();
+// 清掉會被唸出來、打斷節奏的符號（保留。、自然停頓、片假名長音ー、？！語調）
+function stripSymbols(t) {
+  t = String(t == null ? "" : t);
+  t = t.replace(/【[^】]*】/g, " ");                       // 【】註記
+  t = t.replace(/[（(][^）)]*[）)]/g, " ");                // （）內補充說明
+  t = t.replace(/[「」『』《》〈〉〔〕［］\[\]｛｝{}"'`＂＇]/g, " "); // 引號/括號（保留內文）
+  t = t.replace(/[／/・･｜|]/g, "、");                      // 分隔符 → 停頓
+  t = t.replace(/[―—–\-]/g, "、");                        // 破折號 → 停頓（不含長音ー U+30FC）
+  t = t.replace(/[→⇒⇨←↑↓↗↘]/g, "、");                    // 箭頭 → 停頓
+  t = t.replace(/[…‥※＊*#~〜～≒=＝]/g, " ");               // 其他符號直接去掉
+  t = t.replace(/\s*、\s*/g, "、");                        // 收掉停頓符前後多餘空白
+  t = t.replace(/、{2,}/g, "、").replace(/。[、。]+/g, "。").replace(/、。/g, "。"); // 合併多餘停頓
+  t = t.replace(/\s{2,}/g, " ").replace(/^[、。\s]+/, "").trim();
+  return t;
 }
+function sayText(ex) { return stripSymbols(ex.kana || ex.jp || ""); }  // 朗讀文字：優先假名
 function escAttr(s) {
   return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -674,7 +687,7 @@ function radioStep() {
   const parts = [];
   const ja = sayText(it);
   for (let k = 0; k < reps; k++) parts.push({ text: ja, lang: "ja-JP" });
-  if (settings.radioZh && it.zh) parts.push({ text: it.zh, lang: "zh-TW" });
+  if (settings.radioZh && it.zh) parts.push({ text: stripSymbols(it.zh), lang: "zh-TW" });
   speakSeq(parts, () => {
     if (!radio.on) return;
     radio.timer = setTimeout(() => { if (!radio.on) return; radio.idx++; radioStep(); }, numSet("radioGap", 1.5) * 1000);
