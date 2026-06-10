@@ -47,7 +47,7 @@ function badges(item) {
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
   { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, readShow: "all",
-    radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioScope: "article" },
+    radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
   settings.theme = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
@@ -882,7 +882,7 @@ function drawRadioNow(it) {
     <div class="rn-tag">${it.tag || ""}</div>
     <div class="rn-jp">${it.jp || ""}</div>
     <div class="rn-kana">${it.kana || ""}</div>
-    <div class="rn-zh">${settings.radioZh ? (it.zh || "") : ""}</div>`;
+    <div class="rn-zh">${(settings.radioShowZh || settings.radioZh) ? (it.zh || "") : ""}</div>`;
 }
 
 const RADIO_MINS = [15, 20, 30];
@@ -918,6 +918,7 @@ function renderRadio() {
       <div class="set-section">播放設定</div>
       <label class="set-row"><span>每句日文重複次數</span><input type="number" id="radio-rep" min="1" max="5" step="1" value="${numSet("radioRepeat", 2)}"></label>
       <label class="set-row"><span>每句之間間隔（秒）</span><input type="number" id="radio-gap" min="0" max="10" step="0.5" value="${numSet("radioGap", 1.5)}"></label>
+      <label class="set-row"><span>同時顯示中文翻譯</span><input type="checkbox" id="radio-showzh" ${settings.radioShowZh ? "checked" : ""}></label>
       <label class="set-row"><span>日文後也唸中文</span><input type="checkbox" id="radio-zh" ${settings.radioZh ? "checked" : ""}></label>
       <div class="controls">
         <button class="btn-good ${radio.on ? "on" : ""}" id="radio-toggle">${radio.on ? "⏹ 停止" : "▶ 開始播放"}</button>
@@ -938,7 +939,8 @@ function renderRadio() {
   mins.onchange = () => { settings.radioMins = Math.max(1, +mins.value || 20); saveSettings(); renderRadio(); };
   document.getElementById("radio-rep").onchange = e => { settings.radioRepeat = Math.max(1, +e.target.value || 2); saveSettings(); };
   document.getElementById("radio-gap").onchange = e => { settings.radioGap = Math.max(0, +e.target.value || 1.5); saveSettings(); };
-  document.getElementById("radio-zh").onchange = e => { settings.radioZh = e.target.checked; saveSettings(); };
+  document.getElementById("radio-showzh").onchange = e => { settings.radioShowZh = e.target.checked; saveSettings(); if (radio.now) drawRadioNow(radio.now); };
+  document.getElementById("radio-zh").onchange = e => { settings.radioZh = e.target.checked; saveSettings(); if (radio.now) drawRadioNow(radio.now); };
   document.getElementById("radio-toggle").onclick = () => { if (radio.on) { stopRadio(); renderRadio(); } else startRadio(); };
 }
 
