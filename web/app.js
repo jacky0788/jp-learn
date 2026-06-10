@@ -163,11 +163,15 @@ function lessonMatches(l, q) {
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem("jp_collapsed") || "[]"));
 function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([...collapsedGroups])); }
 
+function pickerLabel(l) {   // 文章選單只顯示日文標題（去掉中文括號），讓藥丸更短
+  if (l._article) { const t = (l._label || "").replace(/（[^）]*）/g, "").trim(); return t || l._label; }
+  return lessonLabel(l);
+}
 function appendLabel(box, l) {
   const key = lessonKey(l);
   const label = document.createElement("label");
   label.className = (key === selectedKey ? "on" : "") + (l._radio && radio.on ? " playing" : "");
-  label.textContent = lessonLabel(l);
+  label.textContent = pickerLabel(l);
   label.onclick = () => {
     if (key === selectedKey) return;
     selectedKey = key;
@@ -211,20 +215,23 @@ function renderPicker() {
   const q = pickerQuery.trim().toLowerCase();
 
   if (q) {                                   // 搜尋：跨群組列出所有符合（附群組小標）
+    const list = document.createElement("div");
+    list.className = "pick-list";
     let shown = 0;
     GROUPS.forEach(([g, gname]) => {
       const items = LESSONS.filter(l => (l._group || "文法") === g && lessonMatches(l, q));
       if (!items.length) return;
       shown += items.length;
-      subHeader(box, gname);
-      renderGroupBody(box, g, items);
+      subHeader(list, gname);
+      renderGroupBody(list, g, items);
     });
     if (!shown) {
       const empty = document.createElement("span");
       empty.className = "pick-empty";
       empty.textContent = "找不到符合「" + pickerQuery.trim() + "」的主題";
-      box.appendChild(empty);
+      list.appendChild(empty);
     }
+    box.appendChild(list);
     return;
   }
 
@@ -245,7 +252,10 @@ function renderPicker() {
     tabs.appendChild(b);
   });
   box.appendChild(tabs);
-  renderGroupBody(box, activeGroup, LESSONS.filter(l => (l._group || "文法") === activeGroup));
+  const list = document.createElement("div");
+  list.className = "pick-list";
+  renderGroupBody(list, activeGroup, LESSONS.filter(l => (l._group || "文法") === activeGroup));
+  box.appendChild(list);
 }
 
 function initSearch() {

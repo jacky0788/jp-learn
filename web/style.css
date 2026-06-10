@@ -75,6 +75,8 @@ nav button.active { background: #fff; color: #2b3a55; border-color: #fff; font-w
 .pick-group .caret { font-size: 10px; color: #8a97ad; }
 .pick-group .gcount { margin-left: auto; font-size: 11px; color: #8a97ad; background: #fff; border-radius: 10px; padding: 0 7px; }
 .pick-subgroup { flex-basis: 100%; font-size: 11px; color: #8a97ad; font-weight: 600; margin: 4px 0 0 4px; }
+.pick-list { flex-basis: 100%; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px;
+  max-height: 42vh; overflow-y: auto; padding: 2px; }
 .grp-tabs { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .grp-tab { font-size: 14px; font-weight: 600; color: #2b3a55; background: #eef1f5; border: none;
   border-radius: 8px; padding: 7px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
