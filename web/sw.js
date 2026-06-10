@@ -1,5 +1,5 @@
 // 離線快取 Service Worker：網路優先、失敗時用快取（線上更新、離線可看）
-const CACHE = "jp-learn-49bcda3c";
+const CACHE = "jp-learn-ee29fe2b";
 const CORE = [
   "./", "./index.html", "./style.css", "./app.js", "./data.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"

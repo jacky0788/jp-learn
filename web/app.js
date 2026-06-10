@@ -113,35 +113,60 @@ function lessonMatches(l, q) {
   return !q || lessonHaystack(l).includes(q);
 }
 
+let collapsedGroups = new Set(JSON.parse(localStorage.getItem("jp_collapsed") || "[]"));
+function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([...collapsedGroups])); }
+
+function appendLabel(box, l) {
+  const key = lessonKey(l);
+  const label = document.createElement("label");
+  label.className = key === selectedKey ? "on" : "";
+  label.textContent = lessonLabel(l);
+  label.onclick = () => {
+    if (key === selectedKey) return;
+    selectedKey = key;
+    cancelAuto();                     // 換課時停止自動播放
+    renderPicker();
+    renderActive();
+  };
+  box.appendChild(label);
+}
+
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
   box.innerHTML = "";
   const q = pickerQuery.trim().toLowerCase();
+  const searching = !!q;
   let shown = 0;
   GROUPS.forEach(([g, gname]) => {
     const items = LESSONS.filter(l => (l._group || "文法") === g && lessonMatches(l, q));
     if (!items.length) return;
     shown += items.length;
-    const head = document.createElement("span");
-    head.className = "pick-group";
-    head.textContent = gname;
+    const collapsed = !searching && collapsedGroups.has(g);
+    const head = document.createElement("button");
+    head.className = "pick-group" + (collapsed ? " collapsed" : "");
+    head.innerHTML = `<span class="caret">${collapsed ? "▶" : "▼"}</span> ${gname} <span class="gcount">${items.length}</span>`;
+    head.onclick = () => {
+      if (collapsedGroups.has(g)) collapsedGroups.delete(g); else collapsedGroups.add(g);
+      saveCollapsed(); renderPicker();
+    };
     box.appendChild(head);
-    items.forEach(l => {
-      const key = lessonKey(l);
-      const label = document.createElement("label");
-      label.className = key === selectedKey ? "on" : "";
-      label.textContent = lessonLabel(l);
-      label.onclick = () => {
-        if (key === selectedKey) return;
-        selectedKey = key;
-        cancelAuto();                     // 換課時停止自動播放
-        renderPicker();
-        renderActive();
-      };
-      box.appendChild(label);
-    });
+    if (collapsed) return;
+    if (g === "文法") {                  // 文法課再依冊分組
+      const books = [...new Set(items.map(l => l.book || 0))].sort((a, b) => a - b);
+      books.forEach(bk => {
+        if (books.length > 1) {
+          const sh = document.createElement("span");
+          sh.className = "pick-subgroup";
+          sh.textContent = bk ? `第${bk}冊` : "其他";
+          box.appendChild(sh);
+        }
+        items.filter(l => (l.book || 0) === bk).forEach(l => appendLabel(box, l));
+      });
+    } else {
+      items.forEach(l => appendLabel(box, l));
+    }
   });
-  if (q && !shown) {
+  if (searching && !shown) {
     const empty = document.createElement("span");
     empty.className = "pick-empty";
     empty.textContent = "找不到符合「" + pickerQuery.trim() + "」的主題";
@@ -429,8 +454,14 @@ function renderGrammar() {
   let html = "";
   ls.forEach(l => {
     html += `<h2 class="lesson-h">${lessonLabel(l)}　${l.title || ""}</h2>`;
-    (l.grammar || []).forEach((g, gi) => {
-      html += `<div class="gram-item"><h3>${g.point || ""}${badges(g)}</h3>`;
+    const pts = l.grammar || [];
+    const gidOf = gi => `g_${lessonKey(l)}_${gi}`;
+    if (pts.length >= 4) {                 // 文法點多時，頂端放小目錄可跳轉
+      html += `<div class="gram-toc">${pts.map((g, gi) =>
+        `<button class="toc-chip" data-go="${gidOf(gi)}">${(g.point || "").replace(/^🔖\s*/, "")}</button>`).join("")}</div>`;
+    }
+    pts.forEach((g, gi) => {
+      html += `<div class="gram-item" id="${gidOf(gi)}"><h3>${g.point || ""}${badges(g)}</h3>`;
       if (g.setsuzoku && g.setsuzoku.length)
         html += `<div class="block"><span class="blabel">接続</span><ul class="setsuzoku">${g.setsuzoku.map(s => `<li>${s}</li>`).join("")}</ul></div>`;
       if (g.explain)
@@ -456,22 +487,41 @@ function renderGrammar() {
   root.querySelectorAll(".practice li").forEach(li => li.onclick = () => li.classList.toggle("revealed"));
   // 語音播放鈕
   root.querySelectorAll(".play").forEach(b => b.onclick = e => { e.stopPropagation(); speak(b.dataset.say); });
+  // 小目錄跳轉
+  root.querySelectorAll(".toc-chip").forEach(b => b.onclick = () => {
+    const el = document.getElementById(b.dataset.go);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 // ---- 測驗（單字中→日 + 練習題）----
 let quizPool = [], quizOrder = [], quizIdx = 0, quizCur = null, quizView = "quiz", quizKey = null;
 
 const EX_ASK = { translate: "把中文翻成日文", fill: "填入正確形態", choice: "選出正確答案" };
+const asArr = x => Array.isArray(x) ? x : (x ? [x] : []);
 function buildQuizPool() {
   const pool = [];
   activeLessons().forEach(l => {
-    (l.vocab || []).forEach(v => { if (v.zh && v.jp) pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", ask: "看中文，寫出日文單字", tag: lessonLabel(l) }); });
+    (l.vocab || []).forEach(v => {
+      if (v.zh && v.jp) {
+        const alts = (v.kana && v.kana !== v.jp) ? [v.kana] : [];  // 單字也接受假名作答
+        pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", alts, ask: "看中文，寫出日文單字", tag: lessonLabel(l) });
+      }
+    });
     (l.grammar || []).forEach(g => (g.practice || []).forEach(p => {
-      if (p.q && p.a) pool.push({ q: p.q, a: p.a, sub: p.note || "", ask: g.point || "", tag: lessonLabel(l) });
+      if (p.q && p.a) pool.push({ q: p.q, a: p.a, sub: p.note || "", alts: asArr(p.alt), ask: g.point || "", tag: lessonLabel(l) });
     }));
-    (l.exercises || []).forEach(e => { if (e.q && e.a) pool.push({ q: e.q, a: e.a, sub: e.explain || "", ask: EX_ASK[e.type] || "", tag: lessonLabel(l) }); });
+    (l.exercises || []).forEach(e => { if (e.q && e.a) pool.push({ q: e.q, a: e.a, sub: e.explain || "", alts: asArr(e.alt), ask: EX_ASK[e.type] || "", tag: lessonLabel(l) }); });
   });
   return pool;
+}
+
+// 比對答案：忽略空白／全形空白、句尾句點，接受多個正解
+function normAns(s) { return String(s == null ? "" : s).replace(/[\s　]/g, "").replace(/[。．.]+$/, "").trim(); }
+function answerOK(input, cur) {
+  const a = normAns(input);
+  if (!a) return false;
+  return [cur.a, ...(cur.alts || [])].some(x => normAns(x) === a);
 }
 
 function renderQuiz() {
@@ -512,7 +562,7 @@ function drawQuiz() {
   const input = document.getElementById("qin");
   input.focus();
   const reveal = () => {
-    const ok = input.value.trim() === quizCur.a.trim();
+    const ok = answerOK(input.value, quizCur);
     document.getElementById("qans").innerHTML =
       `${ok ? '<span class="correct">✓ 正確！</span><br>' : ""}答案：<b>${quizCur.a}</b>` +
       (quizCur.sub ? `<br><span style="color:#777;font-size:14px">${quizCur.sub}</span>` : "");

@@ -221,7 +221,78 @@ def build_anki(lessons):
     return len(vocab_rows), len(grammar_rows)
 
 
+def quiz_count(lz):
+    n = 0
+    for v in lz.get("vocab", []):
+        if isinstance(v, dict) and v.get("zh") and v.get("jp"):
+            n += 1
+    for g in lz.get("grammar", []):
+        for p in (g.get("practice") or []):
+            if p.get("q") and p.get("a"):
+                n += 1
+    for e in lz.get("exercises", []):
+        if isinstance(e, dict) and e.get("q") and e.get("a"):
+            n += 1
+    return n
+
+
+def lint_lessons(lessons):
+    """檢查內容完整性，回傳警告清單（不中斷 build，只提醒）。"""
+    w = []
+    for lz in lessons:
+        name = lz.get("_label") or lz.get("_code") or lz.get("_file")
+        grp = lz["_group"]
+        if not lz.get("title"):
+            w.append("[%s] 缺 title" % name)
+        if grp == "文法":
+            if lz.get("lesson") is None:
+                w.append("[%s] 文法課缺 lesson 欄位" % name)
+        else:
+            if not lz.get("topic"):
+                w.append("[%s] 缺 topic 欄位" % name)
+            if not lz.get("label"):
+                w.append("[%s] 缺 label 欄位" % name)
+        if not lz.get("intro"):
+            w.append("[%s] 缺 intro（導讀）" % name)
+        if not lz.get("goals"):
+            w.append("[%s] 缺 goals（學習目標）" % name)
+        for i, g in enumerate(lz.get("grammar", [])):
+            gp = g.get("point") or ("#%d" % (i + 1))
+            if not g.get("point"):
+                w.append("[%s] grammar#%d 缺 point" % (name, i + 1))
+            for ex in (g.get("examples") or []):
+                for k in ("jp", "kana", "zh"):
+                    if not ex.get(k):
+                        w.append("[%s/%s] 例句缺 %s：%s" % (name, gp, k, ex.get("jp") or ex.get("zh") or "?"))
+            for p in (g.get("practice") or []):
+                if not p.get("q") or not p.get("a"):
+                    w.append("[%s/%s] 練習題缺 q 或 a" % (name, gp))
+            tb = g.get("table")
+            if tb:
+                hl = len(tb.get("headers") or [])
+                rows = tb.get("rows") or []
+                if not rows:
+                    w.append("[%s/%s] table 無 rows" % (name, gp))
+                for ri, row in enumerate(rows):
+                    if hl and len(row) != hl:
+                        w.append("[%s/%s] 表格第%d列欄數(%d)≠表頭(%d)" % (name, gp, ri + 1, len(row), hl))
+        for v in lz.get("vocab", []):
+            if isinstance(v, dict):
+                if not v.get("jp"):
+                    w.append("[%s] 單字缺 jp" % name)
+                if not v.get("zh"):
+                    w.append("[%s] 單字缺 zh：%s" % (name, v.get("jp")))
+        qc = quiz_count(lz)
+        if qc < 6:
+            w.append("[%s] 測驗只有 %d 題（建議≥6，請補 practice 或 vocab）" % (name, qc))
+    return w
+
+
 def main():
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
     lessons = load_lessons()
     if not lessons:
         sys.exit("找不到任何課程資料（data/lessons/*.yaml）")
@@ -237,6 +308,13 @@ def main():
           sum(len(l["grammar"]) for l in lessons)))
     print("  -> %s（版本 %s 已自動戳印到 index.html／sw.js）" % (web_out.relative_to(ROOT), ver))
     print("  -> exports/anki_vocab.tsv (%d 張)、exports/anki_grammar.tsv (%d 張)" % (nv, ng))
+    warns = lint_lessons(lessons)
+    if warns:
+        print("\n⚠️ 內容檢查發現 %d 個提醒：" % len(warns))
+        for x in warns:
+            print("   - " + x)
+    else:
+        print("\n內容檢查：全部通過 ✅")
     print("\n複習網頁：用瀏覽器開啟 web/index.html")
     print("Anki：匯入 exports/*.tsv（匯入時欄位選 製表符 / Tab 分隔）")
 
