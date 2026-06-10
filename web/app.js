@@ -1,13 +1,21 @@
 // 本機日文複習 App。資料來自 data.js (window.LESSONS)。
 // 無需伺服器，直接用瀏覽器開 index.html 即可。
 
-const GROUP_RANK = { "文法": 0, "会話": 1, "基礎": 2 };
+const ARTICLES = (window.ARTICLES || []);
+const GROUP_RANK = { "文法": 0, "会話": 1, "基礎": 2, "文章": 3 };
 const groupRank = l => (GROUP_RANK[l._group || "文法"] ?? 0);
-const LESSONS = (window.LESSONS || []).slice().sort((a, b) =>
+// 把文章包成可在選單選取的項目（內容放 _article）
+const ARTICLE_LESSONS = ARTICLES.map((a, i) => ({
+  _group: "文章",
+  _code: "A-" + (a._file ? a._file.replace(/\.ya?ml$/, "") : i),
+  _label: a.title || ("文章" + (i + 1)),
+  title: a.title || "", intro: a.intro || "", order: a.order || (i + 1) * 10,
+  grammar: [], vocab: [], exercises: [], notes: [], _article: a
+}));
+const LESSONS = (window.LESSONS || []).concat(ARTICLE_LESSONS).sort((a, b) =>
   groupRank(a) - groupRank(b) ||
   (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0) ||
   (a.order || 0) - (b.order || 0));
-const ARTICLES = (window.ARTICLES || []);
 const ST = JSON.parse(localStorage.getItem("jp_srs") || "{}"); // 熟練度記錄
 
 function save() { localStorage.setItem("jp_srs", JSON.stringify(ST)); }
@@ -106,7 +114,7 @@ let selectedKey = (bunpouLessons.length ? lessonKey(bunpouLessons[bunpouLessons.
 
 function activeLessons() { return LESSONS.filter(l => lessonKey(l) === selectedKey); }
 
-const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"], ["基礎", "📚 基礎文法"]];
+const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"], ["基礎", "📚 基礎文法"], ["文章", "📖 文章"]];
 
 // ---- 搜尋：用關鍵字過濾課程／主題 ----
 let pickerQuery = "";
@@ -121,6 +129,7 @@ function lessonHaystack(l) {
     (g.examples || []).forEach(e => parts.push(e.jp, e.kana, e.zh));
   });
   (l.vocab || []).forEach(v => parts.push(v.jp, v.kana, v.zh, v.pos));
+  if (l._article) (l._article.body || []).forEach(s => parts.push(s.jp, s.kana, s.zh));
   l._hay = parts.filter(Boolean).join(" ").toLowerCase();
   return l._hay;
 }
@@ -214,32 +223,36 @@ function setTab(tab) {
 }
 
 function updateTabs() {
-  // 依內容決定要顯示哪些分頁（有單字才顯示單字卡、有文法才顯示文法…）
+  // 依內容決定要顯示哪些分頁；文章只顯示「📖 文章」閱讀頁
   const l = activeLessons()[0];
+  const art = !!(l && l._article);
   const has = {
-    intro: !!(l && (l.intro || (l.goals || []).length || (l.notes || []).length)),
-    cards: !!(l && (l.vocab || []).length),
-    grammar: !!(l && (l.grammar || []).length),
-    quiz: !!(l && ((l.vocab || []).some(v => v.zh && v.jp)
+    intro: !art && !!(l && (l.intro || (l.goals || []).length || (l.notes || []).length)),
+    cards: !art && !!(l && (l.vocab || []).length),
+    grammar: !art && !!(l && (l.grammar || []).length),
+    quiz: !art && !!(l && ((l.vocab || []).some(v => v.zh && v.jp)
       || (l.grammar || []).some(g => (g.practice || []).length)
-      || (l.exercises || []).length))
+      || (l.exercises || []).length)),
+    read: art,
+    radio: true   // 廣播是跨課的獨立區塊，永遠顯示
   };
-  has.radio = true;   // 廣播是跨課的獨立區塊，永遠顯示
-  ["intro", "cards", "grammar", "quiz"].forEach(t => {
+  ["intro", "cards", "grammar", "quiz", "read"].forEach(t => {
     const btn = document.querySelector(`nav button[data-tab="${t}"]`);
     if (btn) btn.style.display = has[t] ? "" : "none";
   });
-  if (!has[currentTab]) setTab(["intro", "grammar", "cards", "quiz"].find(t => has[t]) || "intro");
+  if (!has[currentTab]) setTab(art ? "read" : (["intro", "grammar", "cards", "quiz"].find(t => has[t]) || "radio"));
 }
 
 function renderActive() {
   if (currentTab !== "radio") stopRadio();   // 離開廣播分頁就停止播放
+  if (currentTab !== "read") stopReader();    // 離開閱讀分頁就停止朗讀
   updateTabs();
   if (currentTab === "intro") renderIntro();
   else if (currentTab === "cards") renderCards();
   else if (currentTab === "grammar") renderGrammar();
-  else if (currentTab === "radio") renderRadio();
-  else renderQuiz();
+  else if (currentTab === "quiz") renderQuiz();
+  else if (currentTab === "read") renderArticle();
+  else renderRadio();
 }
 
 // ---- 說明（導讀 / 學習目標 / 重點）----
@@ -608,6 +621,92 @@ function renderQuizList() {
   const list = document.getElementById("quizlist");
   document.getElementById("quiz-toggle").onclick = () => list.classList.toggle("show-ans");
   list.querySelectorAll("li").forEach(li => li.onclick = () => li.classList.toggle("revealed"));
+}
+
+// ---- 📖 文章閱讀（全文顯示＋朗讀，高亮目前句、可連續接下一篇）----
+const reader = { on: false, art: null, idx: 0, tick: null, wake: null, continuous: true };
+function articleKey(a) { return "A-" + (a._file ? a._file.replace(/\.ya?ml$/, "") : ARTICLES.indexOf(a)); }
+async function reqWakeR() { try { if (navigator.wakeLock) reader.wake = await navigator.wakeLock.request("screen"); } catch (e) { } }
+function relWakeR() { try { if (reader.wake) reader.wake.release(); } catch (e) { } reader.wake = null; }
+function clearReadHL() { document.querySelectorAll("#read .rsent.now").forEach(e => e.classList.remove("now")); }
+function highlightRead(i) {
+  clearReadHL();
+  const el = document.getElementById("rs" + i);
+  if (el) { el.classList.add("now"); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+}
+function stopReader() {
+  reader.on = false;
+  if (reader.tick) { clearInterval(reader.tick); reader.tick = null; }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  relWakeR();
+  clearReadHL();
+  const b = document.getElementById("read-toggle"); if (b) { b.textContent = "▶ 朗讀"; b.classList.remove("on"); }
+}
+function startReader(fromIdx) {
+  const l = activeLessons()[0];
+  if (!l || !l._article) return;
+  reader.art = l._article;
+  reader.idx = (typeof fromIdx === "number") ? fromIdx : 0;
+  reader.on = true;
+  reqWakeR();
+  const b = document.getElementById("read-toggle"); if (b) { b.textContent = "⏹ 停止"; b.classList.add("on"); }
+  if (!reader.tick) reader.tick = setInterval(() => { if (window.speechSynthesis && reader.on) { try { speechSynthesis.resume(); } catch (e) { } } }, 1000);
+  readerStep();
+}
+function readerStep() {
+  if (!reader.on) return;
+  const body = reader.art.body || [];
+  if (reader.idx >= body.length) {                       // 一篇唸完
+    const ni = ARTICLES.indexOf(reader.art) + 1;
+    if (reader.continuous && ni < ARTICLES.length) {       // 接下一篇
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      const next = ARTICLES[ni];
+      selectedKey = articleKey(next); reader.art = next; reader.idx = 0;
+      setTab("read"); renderPicker(); renderArticle();
+      readerStep();
+    } else { finishReader(); }
+    return;
+  }
+  const s = body[reader.idx];
+  highlightRead(reader.idx);
+  const u = new SpeechSynthesisUtterance(sayText(s));
+  u.lang = "ja-JP"; u.rate = settings.rate || 0.9;
+  const v = jaVoice(); if (v) u.voice = v;
+  u.onend = () => { if (reader.on) { reader.idx++; setTimeout(() => { if (reader.on) readerStep(); }, 350); } };
+  u.onerror = () => { if (reader.on) { reader.idx++; readerStep(); } };
+  if (window.speechSynthesis) speechSynthesis.speak(u);
+}
+function finishReader() {
+  stopReader();
+  const el = document.querySelector("#read .read-bar .read-done");
+  if (el) el.textContent = "✅ 讀完了！";
+}
+function renderArticle() {
+  const root = document.getElementById("read");
+  const l = activeLessons()[0];
+  if (!l || !l._article) { root.innerHTML = '<p class="empty">請在上方「📖 文章」選一篇文章。</p>'; return; }
+  const a = l._article;
+  root.innerHTML = `
+    <div class="read-head">
+      <h2>${a.title || ""} ${a.level ? `<span class="lv">${a.level}</span>` : ""}</h2>
+      ${a.intro ? `<div class="read-intro">${mdParagraphs(a.intro)}</div>` : ""}
+      <div class="read-bar">
+        <button class="btn-good ${reader.on ? "on" : ""}" id="read-toggle">${reader.on ? "⏹ 停止" : "▶ 朗讀"}</button>
+        <label class="read-opt"><input type="checkbox" id="read-cont" ${reader.continuous ? "checked" : ""}> 播完接下一篇</label>
+        <span class="read-done"></span>
+      </div>
+      <div class="read-hint">點任一句可從那句開始朗讀；朗讀時會高亮目前句子。</div>
+    </div>
+    <div class="read-body">
+      ${(a.body || []).map((s, i) => `<p class="rsent" id="rs${i}" data-i="${i}">
+        <span class="rs-jp">${s.jp || ""}</span>
+        <span class="rs-kana">${s.kana || ""}</span>
+        <span class="rs-zh">${s.zh || ""}</span></p>`).join("")}
+    </div>`;
+  document.getElementById("read-toggle").onclick = () => { if (reader.on) stopReader(); else startReader(); };
+  document.getElementById("read-cont").onchange = e => { reader.continuous = e.target.checked; };
+  root.querySelectorAll(".rsent").forEach(p => p.onclick = () => { stopReader(); startReader(+p.dataset.i); });
+  if (reader.on && reader.art === a) highlightRead(reader.idx);
 }
 
 // ---- 🎧 廣播聽力（連續朗讀，邊運動邊聽）----

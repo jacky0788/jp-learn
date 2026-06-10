@@ -174,6 +174,25 @@ main { max-width: 820px; margin: 0 auto; padding: 20px; }
 .quiz-ans .correct { color: #1e8449; }
 .empty { color: #888; text-align: center; padding: 40px; }
 
+/* 📖 文章閱讀 */
+.read-head { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-top: 4px solid #2b3a55; margin-bottom: 10px; }
+.read-head h2 { margin: 0 0 8px; color: #2b3a55; font-size: 20px; }
+.read-head .lv { font-size: 12px; color: #fff; background: #8a97ad; border-radius: 10px; padding: 1px 8px; vertical-align: middle; }
+.read-intro { font-size: 14px; color: #6b7688; margin-bottom: 10px; }
+.read-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.read-opt { font-size: 13px; color: #2b3a55; }
+.read-done { font-size: 14px; color: #2e7d32; }
+.read-hint { font-size: 12px; color: #8a97ad; margin-top: 8px; }
+#read-toggle.on { background: #c0392b; color: #fff; }
+.read-body { background: #fff; border-radius: 12px; padding: 8px 6px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.rsent { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin: 2px 0; transition: background .15s; }
+.rsent:hover { background: #f2f5f9; }
+.rsent .rs-jp { display: block; font-size: 19px; color: #2b3a55; line-height: 1.5; }
+.rsent .rs-kana { display: block; font-size: 13px; color: #8a97ad; }
+.rsent .rs-zh { display: block; font-size: 14px; color: #555; }
+.rsent.now { background: #fff3cd; box-shadow: inset 4px 0 0 #f0ad4e; }
+.rsent.now .rs-jp { color: #1f2a44; font-weight: 600; }
+
 /* 🎧 廣播聽力 */
 .radio-box { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-top: 4px solid #2b3a55; }
 .radio-hint { font-size: 13px; color: #6b7688; background: #eef1f5; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
@@ -222,6 +241,16 @@ body.dark .radio-custom { color: #cdd6e6; }
 body.dark .rn-jp { color: #e8ecf2; }
 body.dark .rn-kana { color: #99a2b0; }
 body.dark .rn-zh { color: #cdd6e6; }
+body.dark .read-head, body.dark .read-body { background: #232831; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+body.dark .read-head h2 { color: #e8ecf2; }
+body.dark .read-intro { color: #aab3c0; }
+body.dark .read-opt { color: #cdd6e6; }
+body.dark .rsent:hover { background: #2a303a; }
+body.dark .rsent .rs-jp { color: #e8ecf2; }
+body.dark .rsent .rs-kana { color: #99a2b0; }
+body.dark .rsent .rs-zh { color: #cdd6e6; }
+body.dark .rsent.now { background: #3a3320; box-shadow: inset 4px 0 0 #f0ad4e; }
+body.dark .rsent.now .rs-jp { color: #fff; }
 body.dark #lesson-search { background: #232831; border-color: #3a3f47; color: #e3e6ea; }
 body.dark .pick-empty { color: #99a2b0; }
 body.dark .link { color: #7fb6e6; }
