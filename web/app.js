@@ -459,7 +459,7 @@ function renderGrammar() {
 }
 
 // ---- 測驗（單字中→日 + 練習題）----
-let quizPool = [], quizCur = null;
+let quizPool = [], quizOrder = [], quizIdx = 0, quizCur = null, quizView = "quiz", quizKey = null;
 
 const EX_ASK = { translate: "把中文翻成日文", fill: "填入正確形態", choice: "選出正確答案" };
 function buildQuizPool() {
@@ -478,13 +478,29 @@ function renderQuiz() {
   const root = document.getElementById("quiz");
   quizPool = buildQuizPool();
   if (!quizPool.length) { root.innerHTML = '<p class="empty">這些課還沒有可出題的資料。</p>'; return; }
-  nextQuiz();
+  const key = selectedKey + "#" + quizPool.length;
+  if (key !== quizKey) { quizKey = key; quizOrder = shuffle(quizPool.map((_, i) => i)); quizIdx = 0; }
+  if (quizView === "list") renderQuizList(); else drawQuiz();
 }
 
-function nextQuiz() {
+function quizBar(extra) {
+  return `<div class="auto-bar">
+    <button class="link" id="quiz-list">📋 列出全部題庫</button>
+    ${extra || ""}</div>`;
+}
+
+function drawQuiz() {
   const root = document.getElementById("quiz");
-  quizCur = quizPool[Math.floor(Math.random() * quizPool.length)];
-  root.innerHTML = `
+  if (quizIdx >= quizOrder.length) {
+    root.innerHTML = quizBar(`<span class="vcount">共 ${quizPool.length} 題</span>`) +
+      `<p class="empty">✅ 本單元 ${quizPool.length} 題都出過一輪了！</p>
+       <div class="controls"><button class="btn-good" id="quiz-again">🔀 再來一輪</button></div>`;
+    document.getElementById("quiz-again").onclick = () => { quizOrder = shuffle(quizPool.map((_, i) => i)); quizIdx = 0; drawQuiz(); };
+    document.getElementById("quiz-list").onclick = () => { quizView = "list"; renderQuiz(); };
+    return;
+  }
+  quizCur = quizPool[quizOrder[quizIdx]];
+  root.innerHTML = quizBar(`<span class="vcount">第 ${quizIdx + 1} / ${quizPool.length} 題</span>`) + `
     <div class="ex-item">
       ${quizCur.ask ? `<div class="quiz-ask">📝 考點：${quizCur.ask}</div>` : ""}
       <div class="quiz-q">${quizCur.q}<span class="tag">${quizCur.tag}</span></div>
@@ -492,6 +508,7 @@ function nextQuiz() {
       <div class="quiz-ans" id="qans"></div>
       <div class="controls"><button class="btn-next" id="show">看答案</button></div>
     </div>`;
+  document.getElementById("quiz-list").onclick = () => { quizView = "list"; renderQuiz(); };
   const input = document.getElementById("qin");
   input.focus();
   const reveal = () => {
@@ -499,11 +516,30 @@ function nextQuiz() {
     document.getElementById("qans").innerHTML =
       `${ok ? '<span class="correct">✓ 正確！</span><br>' : ""}答案：<b>${quizCur.a}</b>` +
       (quizCur.sub ? `<br><span style="color:#777;font-size:14px">${quizCur.sub}</span>` : "");
-    document.getElementById("show").textContent = "下一題";
-    document.getElementById("show").onclick = nextQuiz;
+    const btn = document.getElementById("show");
+    btn.textContent = quizIdx + 1 >= quizOrder.length ? "看結果" : "下一題 →";
+    btn.onclick = () => { quizIdx++; drawQuiz(); };
   };
   input.onkeydown = e => { if (e.key === "Enter") reveal(); };
   document.getElementById("show").onclick = reveal;
+}
+
+// 列出全部題庫（像單字列表，答案預設隱藏，可整批或單題顯示）
+function renderQuizList() {
+  const root = document.getElementById("quiz");
+  root.innerHTML = quizBar(
+    `<button class="link" id="quiz-toggle">顯示/隱藏答案</button>
+     <span class="vcount">共 ${quizPool.length} 題</span>`) +
+    `<ol class="practice" id="quizlist">${quizPool.map(p => `
+      <li>${p.ask ? `<span class="ans-note">［${p.ask}］</span> ` : ""}<span class="pq">${p.q}</span>
+        <span class="ans">${p.a}</span>${p.sub ? `<span class="ans-note">（${p.sub}）</span>` : ""}</li>`).join("")}</ol>`;
+  // 此模式下「列出全部題庫」鈕改成回作答
+  const back = document.getElementById("quiz-list");
+  back.textContent = "📝 作答模式";
+  back.onclick = () => { quizView = "quiz"; renderQuiz(); };
+  const list = document.getElementById("quizlist");
+  document.getElementById("quiz-toggle").onclick = () => list.classList.toggle("show-ans");
+  list.querySelectorAll("li").forEach(li => li.onclick = () => li.classList.toggle("revealed"));
 }
 
 // ---- 啟動 ----
