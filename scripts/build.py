@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LESSONS_DIR = ROOT / "data" / "lessons"   # 文法課（依冊）
 KAIWA_DIR = ROOT / "data" / "kaiwa"       # 會話課（依主題）
 KISO_DIR = ROOT / "data" / "kiso"         # 基礎文法（自學補充）
+ARTICLES_DIR = ROOT / "data" / "articles"  # 廣播用連貫文章
 WEB_DIR = ROOT / "web"
 EXPORTS_DIR = ROOT / "exports"
 
@@ -156,11 +157,25 @@ def item_tags(code, item):
     return " ".join(tags)
 
 
-def build_web(lessons):
+def load_articles():
+    items = []
+    for f in sorted(ARTICLES_DIR.glob("*.yaml")):
+        with open(f, encoding="utf-8") as fp:
+            d = yaml.safe_load(fp)
+        if not d:
+            continue
+        d["_file"] = f.name
+        d.setdefault("body", [])
+        items.append(d)
+    return items
+
+
+def build_web(lessons, articles):
     WEB_DIR.mkdir(exist_ok=True)
     payload = json.dumps(lessons, ensure_ascii=False, indent=2)
+    apayload = json.dumps(articles, ensure_ascii=False, indent=2)
     out = WEB_DIR / "data.js"
-    out.write_text("window.LESSONS = " + payload + ";\n", encoding="utf-8")
+    out.write_text("window.LESSONS = " + payload + ";\nwindow.ARTICLES = " + apayload + ";\n", encoding="utf-8")
     return out
 
 
@@ -296,19 +311,29 @@ def main():
     lessons = load_lessons()
     if not lessons:
         sys.exit("找不到任何課程資料（data/lessons/*.yaml）")
-    web_out = build_web(lessons)
+    articles = load_articles()
+    web_out = build_web(lessons, articles)
     ver = stamp_version()
     nv, ng = build_anki(lessons)
     total_vocab = sum(len(l["vocab"]) for l in lessons)
     n_bun = sum(1 for l in lessons if l["_group"] == "文法")
     n_kai = sum(1 for l in lessons if l["_group"] == "会話")
     n_kis = sum(1 for l in lessons if l["_group"] == "基礎")
-    print("已載入 文法課 %d、會話課主題 %d、基礎文法 %d；單字 %d、文法 %d" % (
-          n_bun, n_kai, n_kis, total_vocab,
+    art_sent = sum(len(a.get("body") or []) for a in articles)
+    print("已載入 文法課 %d、會話課主題 %d、基礎文法 %d、文章 %d篇(%d句)；單字 %d、文法 %d" % (
+          n_bun, n_kai, n_kis, len(articles), art_sent, total_vocab,
           sum(len(l["grammar"]) for l in lessons)))
     print("  -> %s（版本 %s 已自動戳印到 index.html／sw.js）" % (web_out.relative_to(ROOT), ver))
     print("  -> exports/anki_vocab.tsv (%d 張)、exports/anki_grammar.tsv (%d 張)" % (nv, ng))
     warns = lint_lessons(lessons)
+    for a in articles:
+        nm = a.get("title") or a.get("_file")
+        if not a.get("body"):
+            warns.append("[文章:%s] 沒有 body 內容" % nm)
+        for si, s in enumerate(a.get("body") or []):
+            for k in ("jp", "kana", "zh"):
+                if not s.get(k):
+                    warns.append("[文章:%s] 第%d句缺 %s" % (nm, si + 1, k))
     if warns:
         print("\n⚠️ 內容檢查發現 %d 個提醒：" % len(warns))
         for x in warns:

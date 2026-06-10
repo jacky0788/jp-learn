@@ -7,6 +7,7 @@ const LESSONS = (window.LESSONS || []).slice().sort((a, b) =>
   groupRank(a) - groupRank(b) ||
   (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0) ||
   (a.order || 0) - (b.order || 0));
+const ARTICLES = (window.ARTICLES || []);
 const ST = JSON.parse(localStorage.getItem("jp_srs") || "{}"); // 熟練度記錄
 
 function save() { localStorage.setItem("jp_srs", JSON.stringify(ST)); }
@@ -25,7 +26,7 @@ function badges(item) {
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
   { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9,
-    radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioScope: "kaiwa" },
+    radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
   settings.theme = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
@@ -620,6 +621,10 @@ function radioScopeLessons() {
 }
 function buildRadioPool() {
   const pool = [];
+  if (settings.radioScope === "article") {       // 📖 連貫文章：照順序整篇唸
+    ARTICLES.forEach(a => (a.body || []).forEach(s => { if (s.jp) pool.push({ jp: s.jp, kana: s.kana, zh: s.zh, tag: a.title || "文章" }); }));
+    return pool;
+  }
   radioScopeLessons().forEach(l => {
     const tag = lessonLabel(l);
     (l.grammar || []).forEach(g => (g.examples || []).forEach(ex => { if (ex.jp) pool.push({ jp: ex.jp, kana: ex.kana, zh: ex.zh, tag }); }));
@@ -627,6 +632,7 @@ function buildRadioPool() {
   });
   return pool;
 }
+const isArticleMode = () => settings.radioScope === "article";
 
 async function reqWake() { try { if (navigator.wakeLock) radio.wake = await navigator.wakeLock.request("screen"); } catch (e) { } }
 function relWake() { try { if (radio.wake) radio.wake.release(); } catch (e) { } radio.wake = null; }
@@ -666,7 +672,8 @@ function startRadio() {
   const pool = buildRadioPool();
   if (!pool.length) { renderRadio(); return; }
   stopRadio();
-  radio.deck = shuffle(pool); radio.idx = 0; radio.on = true;
+  radio.deck = isArticleMode() ? pool : shuffle(pool);   // 文章照順序，其餘隨機
+  radio.idx = 0; radio.on = true;
   radio.endAt = Date.now() + numSet("radioMins", 20) * 60000;
   reqWake();
   renderRadio();                                   // 切換成「播放中」畫面
@@ -683,7 +690,7 @@ function radioStep() {
   const it = radio.deck[radio.idx % radio.deck.length];
   radio.now = it;
   drawRadioNow(it);
-  const reps = Math.max(1, Math.round(numSet("radioRepeat", 2)));
+  const reps = isArticleMode() ? 1 : Math.max(1, Math.round(numSet("radioRepeat", 2)));  // 文章不重複，保持連貫
   const parts = [];
   const ja = sayText(it);
   for (let k = 0; k < reps; k++) parts.push({ text: ja, lang: "ja-JP" });
@@ -721,9 +728,9 @@ function renderRadio() {
   const minBtn = m => `<button class="seg ${numSet("radioMins", 20) === m ? "on" : ""}" data-min="${m}">${m}分</button>`;
   root.innerHTML = `
     <div class="radio-box">
-      <div class="radio-hint">🎧 連續朗讀例句，邊運動邊聽。建議讓螢幕保持開啟（已自動嘗試防鎖屏）。</div>
+      <div class="radio-hint">🎧 連續朗讀，邊運動邊聽。建議讓螢幕保持開啟（已自動嘗試防鎖屏）。${scope === "article" ? "<br>📖 文章模式：整篇照順序連貫朗讀、不重複，播完一篇接下一篇。" : ""}</div>
       <div class="set-section">範圍</div>
-      <div class="seg-row">${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("topic", "目前主題")}${scopeBtn("all", "📚 全部")}</div>
+      <div class="seg-row">${scopeBtn("article", "📖 文章")}${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("topic", "目前主題")}${scopeBtn("all", "📚 全部")}</div>
       <div class="set-section">播放時間</div>
       <div class="seg-row">${RADIO_MINS.map(minBtn).join("")}
         <label class="radio-custom">自訂 <input type="number" id="radio-mins" min="1" max="120" step="1" value="${numSet("radioMins", 20)}"> 分</label></div>
