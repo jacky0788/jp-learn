@@ -1,7 +1,8 @@
 // 本機日文複習 App。資料來自 data.js (window.LESSONS)。
 // 無需伺服器，直接用瀏覽器開 index.html 即可。
 
-const groupRank = l => ((l._group || "文法") === "会話" ? 1 : 0);
+const GROUP_RANK = { "文法": 0, "会話": 1, "基礎": 2 };
+const groupRank = l => (GROUP_RANK[l._group || "文法"] ?? 0);
 const LESSONS = (window.LESSONS || []).slice().sort((a, b) =>
   groupRank(a) - groupRank(b) ||
   (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0) ||
@@ -90,7 +91,7 @@ let selectedKey = (bunpouLessons.length ? lessonKey(bunpouLessons[bunpouLessons.
 
 function activeLessons() { return LESSONS.filter(l => lessonKey(l) === selectedKey); }
 
-const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"]];
+const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"], ["基礎", "📚 基礎文法"]];
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
   box.innerHTML = "";

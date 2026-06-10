@@ -20,8 +20,11 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 LESSONS_DIR = ROOT / "data" / "lessons"   # 文法課（依冊）
 KAIWA_DIR = ROOT / "data" / "kaiwa"       # 會話課（依主題）
+KISO_DIR = ROOT / "data" / "kiso"         # 基礎文法（自學補充）
 WEB_DIR = ROOT / "web"
 EXPORTS_DIR = ROOT / "exports"
+
+GROUP_RANK = {"文法": 0, "会話": 1, "基礎": 2}
 
 
 def load_lessons():
@@ -30,10 +33,12 @@ def load_lessons():
         items.append(_load_one(f, "文法"))
     for f in sorted(KAIWA_DIR.glob("*.yaml")):
         items.append(_load_one(f, "会話"))
+    for f in sorted(KISO_DIR.glob("*.yaml")):
+        items.append(_load_one(f, "基礎"))
     items = [d for d in items if d]
-    # 排序：文法課在前（依冊、課）→ 會話課在後（依 order）
+    # 排序：文法課在前（依冊、課）→ 會話課（依 order）→ 基礎文法（依 order）
     items.sort(key=lambda d: (
-        0 if d["_group"] == "文法" else 1,
+        GROUP_RANK.get(d["_group"], 1),
         d.get("book") or 0, d.get("lesson") or 0, d.get("order") or 0, d["_file"]))
     return items
 
@@ -48,6 +53,8 @@ def _load_one(f, group):
         group = "会話"
     elif data.get("track") in ("文法", "bunpou"):
         group = "文法"
+    elif data.get("track") in ("基礎", "基础", "kiso"):
+        group = "基礎"
     data["_file"] = f.name
     data["_group"] = group
     data.setdefault("vocab", [])
@@ -64,10 +71,11 @@ def lesson_code(data, group):
     if group == "文法" and lesson is not None:
         code = ("B%dL%02d" % (book, lesson)) if book else ("L%02d" % lesson)
         return code, code
-    # 會話：用 topic 當唯一鍵，label 短名顯示在選單
+    # 會話／基礎：用 topic 當唯一鍵，label 短名顯示在選單
     topic = data.get("topic") or data["_file"].rsplit(".", 1)[0]
     label = data.get("label") or data.get("title") or topic
-    return "K-" + topic, label
+    prefix = "G-" if group == "基礎" else "K-"
+    return prefix + topic, label
 
 
 def tsv_escape(s):
@@ -135,7 +143,9 @@ def main():
     total_vocab = sum(len(l["vocab"]) for l in lessons)
     n_bun = sum(1 for l in lessons if l["_group"] == "文法")
     n_kai = sum(1 for l in lessons if l["_group"] == "会話")
-    print("已載入 文法課 %d、會話課主題 %d；單字 %d、文法 %d" % (n_bun, n_kai, total_vocab,
+    n_kis = sum(1 for l in lessons if l["_group"] == "基礎")
+    print("已載入 文法課 %d、會話課主題 %d、基礎文法 %d；單字 %d、文法 %d" % (
+          n_bun, n_kai, n_kis, total_vocab,
           sum(len(l["grammar"]) for l in lessons)))
     print("  -> %s" % web_out.relative_to(ROOT))
     print("  -> exports/anki_vocab.tsv (%d 張)、exports/anki_grammar.tsv (%d 張)" % (nv, ng))
