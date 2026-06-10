@@ -69,6 +69,20 @@ function syncSettingsUI() {
   if (rate) rate.onchange = () => { settings.rate = parseFloat(rate.value) || 0.9; saveSettings(); };
 })();
 
+// 🎧 廣播：獨立浮層（與課程分頁分開），關閉浮層不會停止播放
+function syncRadioBtn() {
+  const b = document.getElementById("radio-open");
+  if (b) b.classList.toggle("playing", !!radio.on);
+}
+(function initRadioPanel() {
+  const panel = document.getElementById("radio-panel");
+  const open = document.getElementById("radio-open");
+  if (open) open.onclick = () => { renderRadio(); panel.classList.remove("hidden"); };
+  const close = document.getElementById("radio-close");
+  if (close) close.onclick = () => panel.classList.add("hidden");   // 不停止播放，背景繼續
+  if (panel) panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
+})();
+
 // ---- 語音播放（日語 TTS）----
 if (window.speechSynthesis) speechSynthesis.getVoices(); // 預載語音清單
 function jaVoice() {
@@ -233,18 +247,16 @@ function updateTabs() {
     quiz: !art && !!(l && ((l.vocab || []).some(v => v.zh && v.jp)
       || (l.grammar || []).some(g => (g.practice || []).length)
       || (l.exercises || []).length)),
-    read: art,
-    radio: true   // 廣播是跨課的獨立區塊，永遠顯示
+    read: art
   };
   ["intro", "cards", "grammar", "quiz", "read"].forEach(t => {
     const btn = document.querySelector(`nav button[data-tab="${t}"]`);
     if (btn) btn.style.display = has[t] ? "" : "none";
   });
-  if (!has[currentTab]) setTab(art ? "read" : (["intro", "grammar", "cards", "quiz"].find(t => has[t]) || "radio"));
+  if (!has[currentTab]) setTab(art ? "read" : (["intro", "grammar", "cards", "quiz"].find(t => has[t]) || "intro"));
 }
 
 function renderActive() {
-  if (currentTab !== "radio") stopRadio();   // 離開廣播分頁就停止播放
   if (currentTab !== "read") stopReader();    // 離開閱讀分頁就停止朗讀
   updateTabs();
   if (currentTab === "intro") renderIntro();
@@ -252,7 +264,6 @@ function renderActive() {
   else if (currentTab === "grammar") renderGrammar();
   else if (currentTab === "quiz") renderQuiz();
   else if (currentTab === "read") renderArticle();
-  else renderRadio();
 }
 
 // ---- 說明（導讀 / 學習目標 / 重點）----
@@ -742,6 +753,7 @@ function stopRadio() {
   if (radio.tick) { clearInterval(radio.tick); radio.tick = null; }
   if (window.speechSynthesis) speechSynthesis.cancel();
   relWake();
+  syncRadioBtn();
 }
 
 function speakSeq(parts, done) {
@@ -775,6 +787,7 @@ function startRadio() {
   radio.idx = 0; radio.on = true;
   radio.endAt = Date.now() + numSet("radioMins", 20) * 60000;
   reqWake();
+  syncRadioBtn();
   renderRadio();                                   // 切換成「播放中」畫面
   radio.tick = setInterval(() => {
     radioRemain();
@@ -802,15 +815,14 @@ function radioStep() {
 
 function finishRadio() {
   stopRadio();
-  const root = document.getElementById("radio");
-  const card = root.querySelector(".radio-now");
+  const card = document.querySelector("#radio-body .radio-now");
   if (card) card.innerHTML = `<p class="empty">✅ 播放結束（${numSet("radioMins", 20)} 分鐘）！辛苦了～</p>`;
   const btn = document.getElementById("radio-toggle");
   if (btn) { btn.textContent = "▶ 開始播放"; btn.classList.remove("on"); }
 }
 
 function drawRadioNow(it) {
-  const el = document.querySelector("#radio .radio-now");
+  const el = document.querySelector("#radio-body .radio-now");
   if (!el) return;
   el.innerHTML = `
     <div class="rn-tag">${it.tag || ""}</div>
@@ -821,7 +833,8 @@ function drawRadioNow(it) {
 
 const RADIO_MINS = [15, 20, 30];
 function renderRadio() {
-  const root = document.getElementById("radio");
+  const root = document.getElementById("radio-body");
+  if (!root) return;
   const scope = settings.radioScope;
   const scopeBtn = (v, label) => `<button class="seg ${scope === v ? "on" : ""}" data-scope="${v}">${label}</button>`;
   const minBtn = m => `<button class="seg ${numSet("radioMins", 20) === m ? "on" : ""}" data-min="${m}">${m}分</button>`;
