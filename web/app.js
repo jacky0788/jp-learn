@@ -178,59 +178,74 @@ function appendLabel(box, l) {
   box.appendChild(label);
 }
 
+let activeGroup = null;   // 目前選的群組（文法/会話/基礎/文章）
+function subHeader(box, text) {
+  const sh = document.createElement("span");
+  sh.className = "pick-subgroup";
+  sh.textContent = text;
+  box.appendChild(sh);
+}
+function renderGroupBody(box, g, items) {
+  if (g === "文法") {                       // 依冊分組
+    const books = [...new Set(items.map(l => l.book || 0))].sort((a, b) => a - b);
+    books.forEach(bk => {
+      if (books.length > 1) subHeader(box, bk ? `第${bk}冊` : "其他");
+      items.filter(l => (l.book || 0) === bk).forEach(l => appendLabel(box, l));
+    });
+  } else if (g === "文章") {                 // 廣播在最前，再分 短／長文章
+    items.filter(l => l._radio).forEach(l => appendLabel(box, l));
+    [["短文章", a => !isLongArticle(a)], ["長文章", a => isLongArticle(a)]].forEach(([name, pred]) => {
+      const sub = items.filter(l => l._article && pred(l._article));
+      if (!sub.length) return;
+      subHeader(box, name + "（" + sub.length + "）");
+      sub.forEach(l => appendLabel(box, l));
+    });
+  } else {
+    items.forEach(l => appendLabel(box, l));
+  }
+}
+
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
   box.innerHTML = "";
   const q = pickerQuery.trim().toLowerCase();
-  const searching = !!q;
-  let shown = 0;
-  GROUPS.forEach(([g, gname]) => {
-    const items = LESSONS.filter(l => (l._group || "文法") === g && lessonMatches(l, q));
-    if (!items.length) return;
-    shown += items.length;
-    const collapsed = !searching && collapsedGroups.has(g);
-    const head = document.createElement("button");
-    head.className = "pick-group" + (collapsed ? " collapsed" : "");
-    head.innerHTML = `<span class="caret">${collapsed ? "▶" : "▼"}</span> ${gname} <span class="gcount">${items.length}</span>`;
-    head.onclick = () => {
-      if (collapsedGroups.has(g)) collapsedGroups.delete(g); else collapsedGroups.add(g);
-      saveCollapsed(); renderPicker();
-    };
-    box.appendChild(head);
-    if (collapsed) return;
-    if (g === "文法") {                  // 文法課再依冊分組
-      const books = [...new Set(items.map(l => l.book || 0))].sort((a, b) => a - b);
-      books.forEach(bk => {
-        if (books.length > 1) {
-          const sh = document.createElement("span");
-          sh.className = "pick-subgroup";
-          sh.textContent = bk ? `第${bk}冊` : "其他";
-          box.appendChild(sh);
-        }
-        items.filter(l => (l.book || 0) === bk).forEach(l => appendLabel(box, l));
-      });
-    } else if (g === "文章") {            // 文章：廣播在最前，再分 短文章／長文章
-      items.filter(l => l._radio).forEach(l => appendLabel(box, l));
-      const subBy = [["短文章", a => !isLongArticle(a)], ["長文章", a => isLongArticle(a)]];
-      subBy.forEach(([name, pred]) => {
-        const sub = items.filter(l => l._article && pred(l._article));
-        if (!sub.length) return;
-        const sh = document.createElement("span");
-        sh.className = "pick-subgroup";
-        sh.textContent = name + "（" + sub.length + "）";
-        box.appendChild(sh);
-        sub.forEach(l => appendLabel(box, l));
-      });
-    } else {
-      items.forEach(l => appendLabel(box, l));
+
+  if (q) {                                   // 搜尋：跨群組列出所有符合（附群組小標）
+    let shown = 0;
+    GROUPS.forEach(([g, gname]) => {
+      const items = LESSONS.filter(l => (l._group || "文法") === g && lessonMatches(l, q));
+      if (!items.length) return;
+      shown += items.length;
+      subHeader(box, gname);
+      renderGroupBody(box, g, items);
+    });
+    if (!shown) {
+      const empty = document.createElement("span");
+      empty.className = "pick-empty";
+      empty.textContent = "找不到符合「" + pickerQuery.trim() + "」的主題";
+      box.appendChild(empty);
     }
-  });
-  if (searching && !shown) {
-    const empty = document.createElement("span");
-    empty.className = "pick-empty";
-    empty.textContent = "找不到符合「" + pickerQuery.trim() + "」的主題";
-    box.appendChild(empty);
+    return;
   }
+
+  // 一般：上方一排群組切換鈕，下方只顯示目前群組的項目（不再疊多層）
+  const avail = GROUPS.filter(([g]) => LESSONS.some(l => (l._group || "文法") === g));
+  if (activeGroup === null || !avail.some(([g]) => g === activeGroup)) {
+    const sel = LESSONS.find(l => lessonKey(l) === selectedKey);
+    activeGroup = (sel && sel._group) || (avail[0] && avail[0][0]) || "文法";
+  }
+  const tabs = document.createElement("div");
+  tabs.className = "grp-tabs";
+  avail.forEach(([g, gname]) => {
+    const n = LESSONS.filter(l => (l._group || "文法") === g).length;
+    const b = document.createElement("button");
+    b.className = "grp-tab" + (g === activeGroup ? " on" : "");
+    b.innerHTML = `${gname} <span class="gcount">${n}</span>`;
+    b.onclick = () => { activeGroup = g; renderPicker(); };
+    tabs.appendChild(b);
+  });
+  box.appendChild(tabs);
+  renderGroupBody(box, activeGroup, LESSONS.filter(l => (l._group || "文法") === activeGroup));
 }
 
 function initSearch() {
