@@ -23,6 +23,14 @@ const LESSONS = (window.LESSONS || []).concat(ARTICLE_LESSONS, [RADIO_LESSON]).s
   (a.order || 0) - (b.order || 0));
 const ST = JSON.parse(localStorage.getItem("jp_srs") || "{}"); // 熟練度記錄
 
+// 文章長短分類 & 廣播自選清單
+function isLongArticle(a) { return ((a && a.body) ? a.body.length : 0) >= 40; }
+function articleId(a) { return a && (a._file || a.title || ""); }
+let playlist = new Set(JSON.parse(localStorage.getItem("jp_playlist") || "[]"));
+function savePlaylist() { localStorage.setItem("jp_playlist", JSON.stringify([...playlist])); }
+function inPlaylist(a) { return playlist.has(articleId(a)); }
+function togglePlaylist(a) { const id = articleId(a); if (playlist.has(id)) playlist.delete(id); else playlist.add(id); savePlaylist(); }
+
 function save() { localStorage.setItem("jp_srs", JSON.stringify(ST)); }
 function lessonKey(l) { return l._code || l.title || l._file; }
 function lessonLabel(l) { return l._label || l._code || l.title || "?"; }
@@ -197,6 +205,18 @@ function renderPicker() {
           box.appendChild(sh);
         }
         items.filter(l => (l.book || 0) === bk).forEach(l => appendLabel(box, l));
+      });
+    } else if (g === "文章") {            // 文章：廣播在最前，再分 短文章／長文章
+      items.filter(l => l._radio).forEach(l => appendLabel(box, l));
+      const subBy = [["短文章", a => !isLongArticle(a)], ["長文章", a => isLongArticle(a)]];
+      subBy.forEach(([name, pred]) => {
+        const sub = items.filter(l => l._article && pred(l._article));
+        if (!sub.length) return;
+        const sh = document.createElement("span");
+        sh.className = "pick-subgroup";
+        sh.textContent = name + "（" + sub.length + "）";
+        box.appendChild(sh);
+        sub.forEach(l => appendLabel(box, l));
       });
     } else {
       items.forEach(l => appendLabel(box, l));
@@ -702,6 +722,7 @@ function renderArticle() {
       <div class="read-bar">
         <button class="btn-good ${reader.on ? "on" : ""}" id="read-toggle">${reader.on ? "⏹ 停止" : "▶ 朗讀"}</button>
         <label class="read-opt"><input type="checkbox" id="read-cont" ${reader.continuous ? "checked" : ""}> 播完接下一篇</label>
+        <button class="link" id="read-fav">${inPlaylist(a) ? "★ 已在廣播清單" : "☆ 加入廣播清單"}</button>
         <span class="read-done"></span>
       </div>
       <div class="read-hint">點任一句可從那句開始朗讀；朗讀時會高亮目前句子。</div>
@@ -714,6 +735,8 @@ function renderArticle() {
     </div>`;
   document.getElementById("read-toggle").onclick = () => { if (reader.on) stopReader(); else startReader(); };
   document.getElementById("read-cont").onchange = e => { reader.continuous = e.target.checked; };
+  const fav = document.getElementById("read-fav");
+  if (fav) fav.onclick = () => { togglePlaylist(a); fav.textContent = inPlaylist(a) ? "★ 已在廣播清單" : "☆ 加入廣播清單"; };
   root.querySelectorAll(".rsent").forEach(p => p.onclick = () => { stopReader(); startReader(+p.dataset.i); });
   if (reader.on && reader.art === a) highlightRead(reader.idx);
 }
@@ -721,26 +744,30 @@ function renderArticle() {
 // ---- 🎧 廣播聽力（連續朗讀，邊運動邊聽）----
 const radio = { on: false, deck: [], idx: 0, timer: null, tick: null, endAt: 0, wake: null, now: null };
 
-function radioScopeLessons() {
-  const s = settings.radioScope;
-  if (s === "topic") return activeLessons();
-  if (s === "all") return LESSONS;
-  return LESSONS.filter(l => (l._group || "文法") === "会話");   // 預設：全部會話
+const ARTICLE_SCOPES = ["mine", "article", "short", "long"];
+function articlePool(filterFn) {
+  const pool = [];
+  ARTICLES.filter(filterFn).forEach(a => (a.body || []).forEach(s => {
+    if (s.jp) pool.push({ jp: s.jp, kana: s.kana, zh: s.zh, tag: a.title || "文章" });
+  }));
+  return pool;
 }
 function buildRadioPool() {
+  const s = settings.radioScope;
+  if (s === "mine") return articlePool(a => inPlaylist(a));            // ⭐ 自選清單
+  if (s === "short") return articlePool(a => !isLongArticle(a));       // 短文章
+  if (s === "long") return articlePool(a => isLongArticle(a));         // 長文章
+  if (s === "article") return articlePool(() => true);                // 全部文章
   const pool = [];
-  if (settings.radioScope === "article") {       // 📖 連貫文章：照順序整篇唸
-    ARTICLES.forEach(a => (a.body || []).forEach(s => { if (s.jp) pool.push({ jp: s.jp, kana: s.kana, zh: s.zh, tag: a.title || "文章" }); }));
-    return pool;
-  }
-  radioScopeLessons().forEach(l => {
+  const lessons = (s === "all") ? LESSONS : LESSONS.filter(l => (l._group || "文法") === "会話");
+  lessons.forEach(l => {
     const tag = lessonLabel(l);
     (l.grammar || []).forEach(g => (g.examples || []).forEach(ex => { if (ex.jp) pool.push({ jp: ex.jp, kana: ex.kana, zh: ex.zh, tag }); }));
     (l.vocab || []).forEach(v => { if (v.ex && v.ex.jp) pool.push({ jp: v.ex.jp, kana: v.ex.kana, zh: v.ex.zh, tag }); });
   });
   return pool;
 }
-const isArticleMode = () => settings.radioScope === "article";
+const isArticleMode = () => ARTICLE_SCOPES.indexOf(settings.radioScope) >= 0;
 
 async function reqWake() { try { if (navigator.wakeLock) radio.wake = await navigator.wakeLock.request("screen"); } catch (e) { } }
 function relWake() { try { if (radio.wake) radio.wake.release(); } catch (e) { } radio.wake = null; }
@@ -836,11 +863,26 @@ function renderRadio() {
   const scope = settings.radioScope;
   const scopeBtn = (v, label) => `<button class="seg ${scope === v ? "on" : ""}" data-scope="${v}">${label}</button>`;
   const minBtn = m => `<button class="seg ${numSet("radioMins", 20) === m ? "on" : ""}" data-min="${m}">${m}分</button>`;
+  const plEditor = `
+    <details class="pl-details">
+      <summary>⭐ 我的清單：已選 <b id="pl-count">${playlist.size}</b> 篇（點此展開勾選）</summary>
+      <div class="pl-edit">
+        ${[["短文章", ARTICLES.filter(a => !isLongArticle(a))], ["長文章", ARTICLES.filter(a => isLongArticle(a))]].map(([nm, arr]) =>
+        `<div class="pl-sub">${nm}（${arr.length}）</div>` + arr.map(a =>
+          `<label class="pl-row"><input type="checkbox" class="pl-cb" data-id="${escAttr(articleId(a))}" ${inPlaylist(a) ? "checked" : ""}><span>${a.title || ""}（${(a.body || []).length}句）</span></label>`
+        ).join("")).join("")}
+      </div>
+    </details>`;
+  const emptyMine = scope === "mine" && playlist.size === 0;
+  const placeholder = emptyMine
+    ? '⭐ 清單還是空的。請展開下方「我的清單」勾選想聽的文章，或改選其他範圍。'
+    : '設定好按「開始播放」，就能一直聽下去 🎶';
   root.innerHTML = `
     <div class="radio-box">
-      <div class="radio-hint">🎧 連續朗讀，邊運動邊聽。建議讓螢幕保持開啟（已自動嘗試防鎖屏）。${scope === "article" ? "<br>📖 文章模式：整篇照順序連貫朗讀、不重複，播完一篇接下一篇。" : ""}</div>
-      <div class="set-section">範圍</div>
-      <div class="seg-row">${scopeBtn("article", "📖 文章")}${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("all", "📚 全部")}</div>
+      <div class="radio-hint">🎧 連續朗讀，邊運動邊聽。建議讓螢幕保持開啟（已自動嘗試防鎖屏）。${isArticleMode() ? "<br>📖 文章照順序連貫朗讀、不重複，一篇接一篇。" : ""}</div>
+      <div class="set-section">聽什麼</div>
+      <div class="seg-row">${scopeBtn("mine", "⭐ 我的清單")}${scopeBtn("article", "📖 全部文章")}${scopeBtn("short", "短文章")}${scopeBtn("long", "長文章")}${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("all", "📚 全部")}</div>
+      ${plEditor}
       <div class="set-section">播放時間</div>
       <div class="seg-row">${RADIO_MINS.map(minBtn).join("")}
         <label class="radio-custom">自訂 <input type="number" id="radio-mins" min="1" max="120" step="1" value="${numSet("radioMins", 20)}"> 分</label></div>
@@ -852,9 +894,15 @@ function renderRadio() {
         <button class="btn-good ${radio.on ? "on" : ""}" id="radio-toggle">${radio.on ? "⏹ 停止" : "▶ 開始播放"}</button>
         <span id="radio-remain" class="vcount">${radio.on ? "剩餘 " + fmtMMSS(radio.endAt - Date.now()) : ""}</span>
       </div>
-      <div class="radio-now">${radio.on && radio.now ? "" : '<p class="empty">設定好按「開始播放」，就能一直聽下去 🎶</p>'}</div>
+      <div class="radio-now">${radio.on && radio.now ? "" : `<p class="empty">${placeholder}</p>`}</div>
     </div>`;
   if (radio.on && radio.now) drawRadioNow(radio.now);
+  root.querySelectorAll(".pl-cb").forEach(cb => cb.onchange = () => {
+    if (cb.checked) playlist.add(cb.dataset.id); else playlist.delete(cb.dataset.id);
+    savePlaylist();
+    const c = document.getElementById("pl-count"); if (c) c.textContent = playlist.size;
+    syncRadioBtn();
+  });
   root.querySelectorAll("[data-scope]").forEach(b => b.onclick = () => { settings.radioScope = b.dataset.scope; saveSettings(); renderRadio(); });
   root.querySelectorAll("[data-min]").forEach(b => b.onclick = () => { settings.radioMins = +b.dataset.min; saveSettings(); renderRadio(); });
   const mins = document.getElementById("radio-mins");
