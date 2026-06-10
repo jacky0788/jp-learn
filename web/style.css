@@ -8,18 +8,17 @@ header {
   position: sticky; top: 0; z-index: 10;
 }
 header h1 { margin: 0 0 10px; font-size: 20px; }
-#settings-toggle, #radio-open { position: absolute; top: 14px; width: 38px; height: 38px;
+#settings-toggle { position: absolute; top: 14px; right: 16px; width: 38px; height: 38px;
   border: none; border-radius: 9px; cursor: pointer; font-size: 18px; line-height: 1;
   background: rgba(255,255,255,.15); }
-#settings-toggle { right: 16px; }
-#radio-open { right: 60px; }
-#settings-toggle:hover, #radio-open:hover { background: rgba(255,255,255,.3); }
-#radio-open.playing { background: #c0392b; animation: radiopulse 1.4s ease-in-out infinite; }
-@keyframes radiopulse { 0%,100% { box-shadow: 0 0 0 0 rgba(192,57,43,.6); } 50% { box-shadow: 0 0 0 6px rgba(192,57,43,0); } }
+#settings-toggle:hover { background: rgba(255,255,255,.3); }
+#lesson-checks label.playing { border-color: #c0392b; color: #c0392b; animation: radiopulse 1.4s ease-in-out infinite; }
+#lesson-checks label.on.playing { background: #c0392b; color: #fff; }
+@keyframes radiopulse { 0%,100% { box-shadow: 0 0 0 0 rgba(192,57,43,.55); } 50% { box-shadow: 0 0 0 5px rgba(192,57,43,0); } }
 
 /* 設定面板 */
 .hidden { display: none !important; }
-#settings-panel, #radio-panel { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45);
+#settings-panel { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45);
   display: flex; align-items: flex-start; justify-content: center; }
 .settings-box { background: #fff; margin-top: 64px; width: min(430px, 92vw); border-radius: 12px;
   padding: 16px 20px 20px; box-shadow: 0 10px 36px rgba(0,0,0,.35); }

@@ -12,7 +12,12 @@ const ARTICLE_LESSONS = ARTICLES.map((a, i) => ({
   title: a.title || "", intro: a.intro || "", order: a.order || (i + 1) * 10,
   grammar: [], vocab: [], exercises: [], notes: [], _article: a
 }));
-const LESSONS = (window.LESSONS || []).concat(ARTICLE_LESSONS).sort((a, b) =>
+// 廣播：放進「📖 文章」群組當第一個項目（order 最小），點了在主畫面顯示播放器
+const RADIO_LESSON = {
+  _group: "文章", _code: "RADIO", _label: "🎧 廣播（連續聽）", title: "廣播聽力",
+  order: -1, grammar: [], vocab: [], exercises: [], notes: [], _radio: true
+};
+const LESSONS = (window.LESSONS || []).concat(ARTICLE_LESSONS, [RADIO_LESSON]).sort((a, b) =>
   groupRank(a) - groupRank(b) ||
   (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0) ||
   (a.order || 0) - (b.order || 0));
@@ -69,19 +74,12 @@ function syncSettingsUI() {
   if (rate) rate.onchange = () => { settings.rate = parseFloat(rate.value) || 0.9; saveSettings(); };
 })();
 
-// 🎧 廣播：獨立浮層（與課程分頁分開），關閉浮層不會停止播放
+// 廣播在「📖 文章」群組裡（選 🎧 項目→主畫面顯示播放器）。播放中可切到別課，背景續播。
 function syncRadioBtn() {
-  const b = document.getElementById("radio-open");
-  if (b) b.classList.toggle("playing", !!radio.on);
+  document.querySelectorAll('#lesson-checks label').forEach(el => {
+    if (el.textContent.indexOf("廣播") >= 0) el.classList.toggle("playing", !!radio.on);
+  });
 }
-(function initRadioPanel() {
-  const panel = document.getElementById("radio-panel");
-  const open = document.getElementById("radio-open");
-  if (open) open.onclick = () => { renderRadio(); panel.classList.remove("hidden"); };
-  const close = document.getElementById("radio-close");
-  if (close) close.onclick = () => panel.classList.add("hidden");   // 不停止播放，背景繼續
-  if (panel) panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
-})();
 
 // ---- 語音播放（日語 TTS）----
 if (window.speechSynthesis) speechSynthesis.getVoices(); // 預載語音清單
@@ -157,7 +155,7 @@ function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([
 function appendLabel(box, l) {
   const key = lessonKey(l);
   const label = document.createElement("label");
-  label.className = key === selectedKey ? "on" : "";
+  label.className = (key === selectedKey ? "on" : "") + (l._radio && radio.on ? " playing" : "");
   label.textContent = lessonLabel(l);
   label.onclick = () => {
     if (key === selectedKey) return;
@@ -239,7 +237,7 @@ function setTab(tab) {
 function updateTabs() {
   // 依內容決定要顯示哪些分頁；文章只顯示「📖 文章」閱讀頁
   const l = activeLessons()[0];
-  const art = !!(l && l._article);
+  const art = !!(l && (l._article || l._radio));
   const has = {
     intro: !art && !!(l && (l.intro || (l.goals || []).length || (l.notes || []).length)),
     cards: !art && !!(l && (l.vocab || []).length),
@@ -263,7 +261,7 @@ function renderActive() {
   else if (currentTab === "cards") renderCards();
   else if (currentTab === "grammar") renderGrammar();
   else if (currentTab === "quiz") renderQuiz();
-  else if (currentTab === "read") renderArticle();
+  else if (currentTab === "read") { const a = activeLessons()[0]; if (a && a._radio) renderRadio(); else renderArticle(); }
 }
 
 // ---- 說明（導讀 / 學習目標 / 重點）----
@@ -815,14 +813,14 @@ function radioStep() {
 
 function finishRadio() {
   stopRadio();
-  const card = document.querySelector("#radio-body .radio-now");
+  const card = document.querySelector("#read .radio-now");
   if (card) card.innerHTML = `<p class="empty">✅ 播放結束（${numSet("radioMins", 20)} 分鐘）！辛苦了～</p>`;
   const btn = document.getElementById("radio-toggle");
   if (btn) { btn.textContent = "▶ 開始播放"; btn.classList.remove("on"); }
 }
 
 function drawRadioNow(it) {
-  const el = document.querySelector("#radio-body .radio-now");
+  const el = document.querySelector("#read .radio-now");
   if (!el) return;
   el.innerHTML = `
     <div class="rn-tag">${it.tag || ""}</div>
@@ -833,7 +831,7 @@ function drawRadioNow(it) {
 
 const RADIO_MINS = [15, 20, 30];
 function renderRadio() {
-  const root = document.getElementById("radio-body");
+  const root = document.getElementById("read");
   if (!root) return;
   const scope = settings.radioScope;
   const scopeBtn = (v, label) => `<button class="seg ${scope === v ? "on" : ""}" data-scope="${v}">${label}</button>`;
@@ -842,7 +840,7 @@ function renderRadio() {
     <div class="radio-box">
       <div class="radio-hint">🎧 連續朗讀，邊運動邊聽。建議讓螢幕保持開啟（已自動嘗試防鎖屏）。${scope === "article" ? "<br>📖 文章模式：整篇照順序連貫朗讀、不重複，播完一篇接下一篇。" : ""}</div>
       <div class="set-section">範圍</div>
-      <div class="seg-row">${scopeBtn("article", "📖 文章")}${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("topic", "目前主題")}${scopeBtn("all", "📚 全部")}</div>
+      <div class="seg-row">${scopeBtn("article", "📖 文章")}${scopeBtn("kaiwa", "💬 全部會話")}${scopeBtn("all", "📚 全部")}</div>
       <div class="set-section">播放時間</div>
       <div class="seg-row">${RADIO_MINS.map(minBtn).join("")}
         <label class="radio-custom">自訂 <input type="number" id="radio-mins" min="1" max="120" step="1" value="${numSet("radioMins", 20)}"> 分</label></div>
