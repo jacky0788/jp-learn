@@ -139,11 +139,12 @@ function applyJaVoice(u) {
 function voiceScore(v) {                                 // 品質排序：挑最自然的日語聲音
   const n = (v.name || "").toLowerCase();
   let s = 0;
+  if (n.includes("siri")) s += 110;                              // iOS Siri 聲音（若系統有開放）最優先
   if (n.includes("google")) s += 100;                            // Android/Chrome 的 Google 日本語
   if (n.includes("natural") || n.includes("online")) s += 90;    // Edge 的 Natural 系列
   if (/kyoko|otoya|o-ren|hattori/.test(n)) s += 85;              // iOS/macOS 高品質
+  if (/enhanced|premium|拡張|進階/.test(n)) s += 15;             // 進階版（如 Kyoko Enhanced）再加分
   if (/nanami|keita|ayumi|haruka|ichiro|sayaka/.test(n)) s += 60;// Microsoft 系列
-  if (n.includes("siri")) s += 50;
   if (/espeak|eloquence|compact|android speech/.test(n)) s -= 80;// 粗糙引擎排到最後
   if (!v.localService) s += 5;                                   // 雲端聲音通常較自然
   return s;
