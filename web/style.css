@@ -30,6 +30,8 @@ header h1 { margin: 0 0 10px; font-size: 20px; }
   padding: 10px 0; border-bottom: 1px solid #eee; }
 .set-row input[type=number] { width: 72px; font-size: 15px; padding: 5px 7px; border: 1px solid #ccd2da; border-radius: 6px; }
 .set-row input[type=range] { width: 140px; }
+.set-row select { max-width: 190px; font-size: 13px; padding: 5px 6px; border: 1px solid #ccd2da; border-radius: 6px; background: #fff; }
+body.dark .set-row select { background: #1f232a; border-color: #3a3f47; color: #e8eaee; }
 
 .auto-bar { text-align: center; margin-bottom: 12px; }
 .vcount { color: #888; font-size: 13px; margin-left: 8px; }
@@ -312,3 +314,43 @@ body.dark .play { background: #2f343d; border-color: #3a3f47; }
 body.dark .play:hover { background: #3a4a6b; }
 body.dark .btn-next { background: #33404f; color: #d7dde6; }
 body.dark .quiz-ask { background: #1c2b22; color: #79d79b; border-left-color: #1e8449; }
+
+/* ===== 響應式排版 ===== */
+/* 手機：縮小留白與字級，內容更緊湊 */
+@media (max-width: 600px) {
+  header { padding: 10px 12px; }
+  header h1 { font-size: 17px; margin-bottom: 8px; }
+  #settings-toggle { top: 8px; right: 10px; width: 34px; height: 34px; font-size: 16px; }
+  nav button { padding: 6px 12px; margin-right: 6px; margin-bottom: 4px; font-size: 13px; }
+  main { padding: 12px 10px; }
+  #lesson-picker { padding: 8px 10px; }
+  .grp-tab { font-size: 13px; padding: 6px 10px; }
+  .pick-list { max-height: 38vh; }
+  .flashcard { padding: 30px 14px; min-height: 180px; }
+  .flashcard .jp { font-size: 31px; }
+  .flashcard .kana, .flashcard .zh { font-size: 18px; }
+  .controls { gap: 8px; flex-wrap: wrap; }
+  .controls button { padding: 9px 14px; font-size: 14px; }
+  .gtable { font-size: 15px; }
+  .gtable th, .gtable td { padding: 6px 7px; }
+  .gram-item, .ex-item { padding: 13px 13px; }
+  .intro-card { padding: 14px 14px; }
+  .read-head { padding: 12px 12px; }
+  .rsent { padding: 8px 9px; }
+  .rsent .rs-jp { font-size: 17px; }
+  .radio-box { padding: 12px; }
+  .seg { padding: 5px 10px; font-size: 13px; }
+  .rn-jp { font-size: 21px; }
+  .quiz-q { font-size: 19px; }
+}
+/* 桌機：標題、分頁、設定鈕排成一列，省垂直空間；內容置中限寬好閱讀 */
+@media (min-width: 900px) {
+  header { display: flex; align-items: center; gap: 20px; padding: 12px 28px; }
+  header h1 { margin: 0; }
+  header nav { display: flex; gap: 8px; }
+  header nav button { margin-right: 0; }
+  #settings-toggle { position: static; order: 9; margin-left: auto; flex: none; }
+  #lesson-picker { padding: 10px 28px; }
+  #lesson-checks { max-width: 1100px; margin: 0 auto; }
+  main { max-width: 880px; }
+}

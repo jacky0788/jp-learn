@@ -46,7 +46,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, readShow: "all",
+  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -63,6 +63,7 @@ function syncSettingsUI() {
   const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
   const rt = document.getElementById("set-rate"); if (rt) rt.value = numSet("rate", 0.9);
   const vol = document.getElementById("set-volume"); if (vol) vol.value = Math.round(numSet("volume", 1) * 100);
+  fillVoiceSelect();
 }
 (function initSettings() {
   const panel = document.getElementById("settings-panel");
@@ -83,6 +84,11 @@ function syncSettingsUI() {
   if (rate) rate.onchange = () => { settings.rate = parseFloat(rate.value) || 0.9; saveSettings(); };
   const vol = document.getElementById("set-volume");
   if (vol) vol.oninput = () => { settings.volume = Math.max(0, Math.min(1, (parseInt(vol.value) || 0) / 100)); saveSettings(); };
+  const voiceSel = document.getElementById("set-voice");
+  if (voiceSel) voiceSel.onchange = () => {
+    settings.voiceName = voiceSel.value; saveSettings();
+    speak("こんにちは");                                  // 試聽一下選的聲音
+  };
 })();
 
 // 廣播在「📖 文章」群組裡（選 🎧 項目→主畫面顯示播放器）。播放中可切到別課，背景續播。
@@ -93,10 +99,52 @@ function syncRadioBtn() {
 }
 
 // ---- 語音播放（日語 TTS）----
-if (window.speechSynthesis) speechSynthesis.getVoices(); // 預載語音清單
+// 手機上 getVoices() 是非同步載入：要監聽 voiceschanged，否則拿到空清單→落回粗糙的預設引擎
+let VOICES = [];
+function refreshVoices() {
+  if (!window.speechSynthesis) return;
+  const vs = speechSynthesis.getVoices() || [];
+  if (vs.length) VOICES = vs;
+  fillVoiceSelect();
+}
+if (window.speechSynthesis) {
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = refreshVoices;
+  setTimeout(refreshVoices, 800);                       // 部分手機瀏覽器不觸發事件，補抓一次
+}
+function jaVoices() {
+  if (!VOICES.length && window.speechSynthesis) VOICES = speechSynthesis.getVoices() || [];
+  return VOICES.filter(v => (v.lang || "").toLowerCase().startsWith("ja"));
+}
+function voiceScore(v) {                                 // 品質排序：挑最自然的日語聲音
+  const n = (v.name || "").toLowerCase();
+  let s = 0;
+  if (n.includes("google")) s += 100;                            // Android/Chrome 的 Google 日本語
+  if (n.includes("natural") || n.includes("online")) s += 90;    // Edge 的 Natural 系列
+  if (/kyoko|otoya|o-ren|hattori/.test(n)) s += 85;              // iOS/macOS 高品質
+  if (/nanami|keita|ayumi|haruka|ichiro|sayaka/.test(n)) s += 60;// Microsoft 系列
+  if (n.includes("siri")) s += 50;
+  if (/espeak|eloquence|compact|android speech/.test(n)) s -= 80;// 粗糙引擎排到最後
+  if (!v.localService) s += 5;                                   // 雲端聲音通常較自然
+  return s;
+}
 function jaVoice() {
-  const vs = window.speechSynthesis ? speechSynthesis.getVoices() : [];
-  return vs.find(v => (v.lang || "").toLowerCase().startsWith("ja"));
+  const vs = jaVoices();
+  if (!vs.length) return null;
+  if (settings.voiceName) {                              // 使用者在設定指定的優先
+    const pick = vs.find(v => v.name === settings.voiceName);
+    if (pick) return pick;
+  }
+  return vs.slice().sort((a, b) => voiceScore(b) - voiceScore(a))[0];
+}
+function fillVoiceSelect() {                             // 設定面板的「日語語音」下拉
+  const sel = document.getElementById("set-voice");
+  if (!sel) return;
+  const vs = jaVoices();
+  const cur = settings.voiceName || "";
+  sel.innerHTML = '<option value="">自動（挑最佳）</option>' +
+    vs.map(v => `<option value="${escAttr(v.name)}"${v.name === cur ? " selected" : ""}>${escAttr(v.name)}${v.localService ? "" : " ☁"}</option>`).join("");
+  if (!vs.length) sel.innerHTML = '<option value="">（此裝置未提供日語語音）</option>';
 }
 function speak(text) {
   if (!window.speechSynthesis || !text) return;
