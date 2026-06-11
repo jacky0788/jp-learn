@@ -113,8 +113,28 @@ if (window.speechSynthesis) {
   setTimeout(refreshVoices, 800);                       // 部分手機瀏覽器不觸發事件，補抓一次
 }
 function jaVoices() {
-  if (!VOICES.length && window.speechSynthesis) VOICES = speechSynthesis.getVoices() || [];
+  if (window.speechSynthesis) {                          // 每次都拿最新：手機清單常在首次互動後才補齊
+    const vs = speechSynthesis.getVoices() || [];
+    if (vs.length) VOICES = vs;
+  }
   return VOICES.filter(v => (v.lang || "").toLowerCase().startsWith("ja"));
+}
+// 裝置沒有日語語音 → 預設引擎會把假名一字一字唸。提示使用者安裝（只提示一次）
+let warnedNoJa = false;
+function warnNoJaVoice() {
+  if (warnedNoJa) return; warnedNoJa = true;
+  const d = document.createElement("div");
+  d.className = "tts-warn";
+  d.innerHTML = `⚠️ 此裝置沒有「日語語音」，目前用系統預設聲音唸（會一字一字唸）。<br>
+    <b>Android</b>：設定 → 一般/系統管理 → 語言 → 文字轉語音(TTS) → Google 語音服務 → 安裝「日文」語音資料，裝完重開瀏覽器。<br>
+    <b>iPhone</b>：設定 → 輔助使用 → 朗讀內容 → 聲音 → 日文 → 下載一個聲音。
+    <button id="tts-warn-close">知道了</button>`;
+  document.body.appendChild(d);
+  document.getElementById("tts-warn-close").onclick = () => d.remove();
+}
+function applyJaVoice(u) {
+  const v = jaVoice();
+  if (v) u.voice = v; else warnNoJaVoice();
 }
 function voiceScore(v) {                                 // 品質排序：挑最自然的日語聲音
   const n = (v.name || "").toLowerCase();
@@ -145,13 +165,19 @@ function fillVoiceSelect() {                             // 設定面板的「�
   sel.innerHTML = '<option value="">自動（挑最佳）</option>' +
     vs.map(v => `<option value="${escAttr(v.name)}"${v.name === cur ? " selected" : ""}>${escAttr(v.name)}${v.localService ? "" : " ☁"}</option>`).join("");
   if (!vs.length) sel.innerHTML = '<option value="">（此裝置未提供日語語音）</option>';
+  const now = document.getElementById("voice-now");
+  if (now) {
+    const v = jaVoice();
+    now.textContent = v ? ("目前使用：" + v.name) : "⚠️ 沒有日語語音→會一字一字唸。請在手機安裝日文 TTS 語音資料後重開瀏覽器。";
+    now.classList.toggle("warn", !v);
+  }
 }
 function speak(text) {
   if (!window.speechSynthesis || !text) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
-  const v = jaVoice(); if (v) u.voice = v;
+  applyJaVoice(u);
   speechSynthesis.speak(u);
 }
 // 清掉會被唸出來、打斷節奏的符號（保留。、自然停頓、片假名長音ー、？！語調）
@@ -448,7 +474,7 @@ function speakTimes(text, times, done) {            // 連續朗讀同一字 tim
     if (autoPlay.seq !== mySeq || !autoPlay.on) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
-    const v = jaVoice(); if (v) u.voice = v;
+    applyJaVoice(u);
     const after = () => {
       if (autoPlay.seq !== mySeq || !autoPlay.on) return;
       n++;
@@ -812,7 +838,7 @@ function readerStep() {
   highlightRead(reader.idx);
   const u = new SpeechSynthesisUtterance(sayText(s));
   u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
-  const v = jaVoice(); if (v) u.voice = v;
+  applyJaVoice(u);
   u.onend = () => { if (reader.on) { reader.idx++; setTimeout(() => { if (reader.on) readerStep(); }, 350); } };
   u.onerror = () => { if (reader.on) { reader.idx++; readerStep(); } };
   if (window.speechSynthesis) speechSynthesis.speak(u);
@@ -913,7 +939,7 @@ function speakSeq(parts, done) {
     const p = parts[i++];
     const u = new SpeechSynthesisUtterance(p.text);
     u.lang = p.lang; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
-    if (p.lang.indexOf("ja") === 0) { const v = jaVoice(); if (v) u.voice = v; }
+    if (p.lang.indexOf("ja") === 0) applyJaVoice(u);
     u.onend = () => { if (radio.on) step(); };
     u.onerror = () => { if (radio.on) step(); };
     speechSynthesis.speak(u);

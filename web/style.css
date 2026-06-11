@@ -32,6 +32,16 @@ header h1 { margin: 0 0 10px; font-size: 20px; }
 .set-row input[type=range] { width: 140px; }
 .set-row select { max-width: 190px; font-size: 13px; padding: 5px 6px; border: 1px solid #ccd2da; border-radius: 6px; background: #fff; }
 body.dark .set-row select { background: #1f232a; border-color: #3a3f47; color: #e8eaee; }
+.set-hint { font-size: 12px; color: #8a97ad; padding: 4px 0 2px; }
+.set-hint.warn { color: #c0392b; }
+body.dark .set-hint.warn { color: #ff8a7a; }
+.tts-warn { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 200;
+  width: min(560px, 94vw); background: #fff8e6; color: #5a4500; border: 1px solid #e8c96a;
+  border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.6;
+  box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+.tts-warn button { margin-top: 8px; padding: 6px 16px; border: none; border-radius: 6px;
+  background: #2b3a55; color: #fff; cursor: pointer; display: block; }
+body.dark .tts-warn { background: #3a3320; color: #ffe9a8; border-color: #6b5a1f; }
 
 .auto-bar { text-align: center; margin-bottom: 12px; }
 .vcount { color: #888; font-size: 13px; margin-left: 8px; }
