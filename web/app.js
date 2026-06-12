@@ -46,7 +46,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
+  { theme: null, minimal: false, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -58,6 +58,7 @@ applyTheme();
 
 function syncSettingsUI() {
   const d = document.getElementById("set-dark"); if (d) d.checked = settings.theme === "dark";
+  const mi = document.getElementById("set-minimal"); if (mi) mi.checked = !!settings.minimal;
   const r = document.getElementById("set-repeats"); if (r) r.value = numSet("repeats", 3);
   const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = numSet("repeatGap", 0.8);
   const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
@@ -74,6 +75,20 @@ function syncSettingsUI() {
   if (panel) panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
   const dark = document.getElementById("set-dark");
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
+  const minimal = document.getElementById("set-minimal");
+  if (minimal) minimal.onchange = () => {
+    settings.minimal = minimal.checked; saveSettings();
+    if (settings.minimal) {
+      stopRadio(); stopReader();                          // 廣播/文章朗讀屬隱藏功能，一併停止
+      const cur = LESSONS.find(l => lessonKey(l) === selectedKey);
+      if (!cur || MINIMAL_GROUPS.indexOf(cur._group || "文法") < 0) {
+        const bun = LESSONS.filter(l => (l._group || "文法") === "文法");
+        if (bun.length) selectedKey = lessonKey(bun[bun.length - 1]);   // 跳回最新文法課
+        activeGroup = "文法";
+      }
+    }
+    renderPicker(); renderActive();
+  };
   const rep = document.getElementById("set-repeats");
   if (rep) rep.onchange = () => { settings.repeats = Math.max(1, Math.min(10, parseInt(rep.value) || 3)); saveSettings(); };
   const rgap = document.getElementById("set-repeat-gap");
@@ -232,6 +247,9 @@ let selectedKey = (bunpouLessons.length ? lessonKey(bunpouLessons[bunpouLessons.
 function activeLessons() { return LESSONS.filter(l => lessonKey(l) === selectedKey); }
 
 const GROUPS = [["文法", "📘 文法課"], ["会話", "💬 會話課"], ["基礎", "📚 基礎文法"], ["文章", "📖 文章"]];
+// 極簡模式：只顯示 文法課/會話課（基礎文法、文章與廣播隱藏）
+const MINIMAL_GROUPS = ["文法", "会話"];
+function visibleGroups() { return settings.minimal ? GROUPS.filter(([g]) => MINIMAL_GROUPS.indexOf(g) >= 0) : GROUPS; }
 
 // ---- 搜尋：用關鍵字過濾課程／主題 ----
 let pickerQuery = "";
@@ -256,9 +274,19 @@ function lessonMatches(l, q) {
 
 let collapsedGroups = new Set(JSON.parse(localStorage.getItem("jp_collapsed") || "[]"));
 function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([...collapsedGroups])); }
-// 子分類收合（短文章／長文章 預設收起）
-let collapsedSubs = new Set(JSON.parse(localStorage.getItem("jp_subcollapsed") || '["文章:短文章","文章:長文章"]'));
-function saveSubs() { localStorage.setItem("jp_subcollapsed", JSON.stringify([...collapsedSubs])); }
+// 子分類收合：短文章／長文章 預設收起；文法課預設只展開「最新一課所在的冊」
+let collapsedSubs = (() => {
+  const stored = localStorage.getItem("jp_subcollapsed2");
+  if (stored) return new Set(JSON.parse(stored));
+  const s = new Set(["文章:短文章", "文章:長文章"]);
+  const bun = LESSONS.filter(l => (l._group || "文法") === "文法");
+  if (bun.length) {
+    const latestBook = bun[bun.length - 1].book || 0;
+    [...new Set(bun.map(l => l.book || 0))].forEach(bk => { if (bk !== latestBook) s.add("文法:" + bk); });
+  }
+  return s;
+})();
+function saveSubs() { localStorage.setItem("jp_subcollapsed2", JSON.stringify([...collapsedSubs])); }
 
 function pickerLabel(l) {   // 文章選單只顯示日文標題（去掉中文括號），讓藥丸更短
   if (l._article) { const t = (l._label || "").replace(/（[^）]*）/g, "").trim(); return t || l._label; }
@@ -328,7 +356,7 @@ function renderPicker() {
     const list = document.createElement("div");
     list.className = "pick-list";
     let shown = 0;
-    GROUPS.forEach(([g, gname]) => {
+    visibleGroups().forEach(([g, gname]) => {
       const items = LESSONS.filter(l => (l._group || "文法") === g && lessonMatches(l, q));
       if (!items.length) return;
       shown += items.length;
@@ -346,7 +374,7 @@ function renderPicker() {
   }
 
   // 一般：上方一排群組切換鈕，下方只顯示目前群組的項目（不再疊多層）
-  const avail = GROUPS.filter(([g]) => LESSONS.some(l => (l._group || "文法") === g));
+  const avail = visibleGroups().filter(([g]) => LESSONS.some(l => (l._group || "文法") === g));
   if (activeGroup === null || !avail.some(([g]) => g === activeGroup)) {
     const sel = LESSONS.find(l => lessonKey(l) === selectedKey);
     activeGroup = (sel && sel._group) || (avail[0] && avail[0][0]) || "文法";
