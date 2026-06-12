@@ -268,13 +268,19 @@ body.dark #lesson-picker { background: #1f232a; border-bottom-color: #333a44; }
   border: 1px solid #d8dee6; padding: 8px 10px; text-align: center; white-space: nowrap;
 }
 .gtable th { background: #eef1f5; color: #2b3a55; font-size: 13px; font-weight: 600; }
-.gtable td { background: #fff; }
+.gtable td { background: #fff; cursor: pointer; }
+.gtable td:hover { background: #eaf1fa; }
+.gtable td:active { background: #dbe7f6; }
 .gtable tbody tr:nth-child(even) td { background: #f6f8fb; }   /* 斑馬紋：大表更好讀 */
+.gtable tbody tr:nth-child(even) td:hover { background: #eaf1fa; }
+.gtable-hint { font-size: 12px; color: #8a97ad; margin-top: 4px; }
 .gtable .hl { color: #d83a3a; font-weight: 700; }
 .gtable ruby rt { font-size: 10px; color: #8a97ad; }
 body.dark .gtable th { background: #2a303a; color: #cdd6e6; border-color: #3a3f47; }
 body.dark .gtable td { background: #232831; border-color: #3a3f47; }
 body.dark .gtable tbody tr:nth-child(even) td { background: #272d38; }
+body.dark .gtable td:hover, body.dark .gtable tbody tr:nth-child(even) td:hover { background: #33404f; }
+body.dark .gtable td:active { background: #3a4a6b; }
 body.dark .gtable .hl { color: #ff7a7a; }
 body.dark .gtable ruby rt { color: #99a2b0; }
 

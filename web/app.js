@@ -689,7 +689,15 @@ function tableHtml(tb) {
     `<tr>${r.map(c => `<td>${cellHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody>`;
   const cap = tb.caption ? `<caption>${cellHtml(tb.caption)}</caption>` : "";
   return `<div class="block"><span class="blabel">圖解</span>
-    <div class="gtable-wrap"><table class="gtable">${cap}${head}${body}</table></div></div>`;
+    <div class="gtable-wrap"><table class="gtable">${cap}${head}${body}</table></div>
+    <div class="gtable-hint">🔊 點表格的字即可發音</div></div>`;
+}
+
+// 表格格子的朗讀文字：ruby 取漢字本體（TTS 會唸對），去掉括號附註
+function cellSayText(td) {
+  const c = td.cloneNode(true);
+  c.querySelectorAll("rt").forEach(r => r.remove());
+  return stripSymbols(c.textContent);
 }
 
 // ---- 文法（講義版面：接続 / 説明 / 圖解 / 例 / 練習）----
@@ -733,6 +741,11 @@ function renderGrammar() {
   root.querySelectorAll(".practice li").forEach(li => li.onclick = () => li.classList.toggle("revealed"));
   // 語音播放鈕
   root.querySelectorAll(".play").forEach(b => b.onclick = e => { e.stopPropagation(); speak(b.dataset.say); });
+  // 圖解表格：點格子發音
+  root.querySelectorAll(".gtable td").forEach(td => td.onclick = () => {
+    const t = cellSayText(td);
+    if (t) speak(t);
+  });
   // 小目錄跳轉
   root.querySelectorAll(".toc-chip").forEach(b => b.onclick = () => {
     const el = document.getElementById(b.dataset.go);
