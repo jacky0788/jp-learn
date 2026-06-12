@@ -18,8 +18,15 @@ header h1 { margin: 0 0 10px; font-size: 20px; }
 
 /* 設定面板 */
 .hidden { display: none !important; }
-#settings-panel { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45);
+#settings-panel, #log-panel { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45);
   display: flex; align-items: flex-start; justify-content: center; }
+.log-body { max-height: 64vh; overflow-y: auto; padding-right: 4px; }
+.log-entry { margin-bottom: 12px; }
+.log-date { font-size: 13px; font-weight: 700; color: #2b3a55; background: #eef1f5;
+  border-radius: 6px; padding: 3px 10px; display: inline-block; margin-bottom: 4px; }
+.log-entry ul { margin: 4px 0 0; padding-left: 20px; }
+.log-entry li { font-size: 14px; margin-bottom: 4px; line-height: 1.6; }
+body.dark .log-date { color: #cdd6e6; background: #2a303a; }
 .settings-box { background: #fff; margin-top: 64px; width: min(430px, 92vw); border-radius: 12px;
   padding: 16px 20px 20px; box-shadow: 0 10px 36px rgba(0,0,0,.35); }
 .settings-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }

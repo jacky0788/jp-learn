@@ -91,6 +91,25 @@ function syncSettingsUI() {
   };
 })();
 
+// ---- 📋 工作日誌（內容更新紀錄，資料來自 data/changelog.yaml）----
+(function initLog() {
+  const panel = document.getElementById("log-panel");
+  const open = document.getElementById("log-open");
+  const close = document.getElementById("log-close");
+  if (!panel || !open) return;
+  open.onclick = () => {
+    const log = window.CHANGELOG || [];
+    document.getElementById("log-body").innerHTML = log.length
+      ? log.map(e => `<div class="log-entry"><div class="log-date">${e.date || ""}</div>
+          <ul>${(e.items || []).map(i => `<li>${i}</li>`).join("")}</ul></div>`).join("")
+      : '<p class="empty">還沒有日誌。</p>';
+    document.getElementById("settings-panel").classList.add("hidden");
+    panel.classList.remove("hidden");
+  };
+  if (close) close.onclick = () => panel.classList.add("hidden");
+  panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
+})();
+
 // 廣播在「📖 文章」群組裡（選 🎧 項目→主畫面顯示播放器）。播放中可切到別課，背景續播。
 function syncRadioBtn() {
   document.querySelectorAll('#lesson-checks label').forEach(el => {

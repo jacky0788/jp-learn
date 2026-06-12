@@ -170,12 +170,22 @@ def load_articles():
     return items
 
 
+def load_changelog():
+    f = ROOT / "data" / "changelog.yaml"
+    if not f.exists():
+        return []
+    with open(f, encoding="utf-8") as fp:
+        return yaml.safe_load(fp) or []
+
+
 def build_web(lessons, articles):
     WEB_DIR.mkdir(exist_ok=True)
     payload = json.dumps(lessons, ensure_ascii=False, indent=2)
     apayload = json.dumps(articles, ensure_ascii=False, indent=2)
+    cpayload = json.dumps(load_changelog(), ensure_ascii=False, indent=2)
     out = WEB_DIR / "data.js"
-    out.write_text("window.LESSONS = " + payload + ";\nwindow.ARTICLES = " + apayload + ";\n", encoding="utf-8")
+    out.write_text("window.LESSONS = " + payload + ";\nwindow.ARTICLES = " + apayload +
+                   ";\nwindow.CHANGELOG = " + cpayload + ";\n", encoding="utf-8")
     return out
 
 

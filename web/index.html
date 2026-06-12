@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="日文複習">
-<link rel="stylesheet" href="style.css?v=38e65419">
+<link rel="stylesheet" href="style.css?v=f1bbe281">
 </head>
 <body>
 <header>
@@ -45,6 +45,9 @@
     <div class="set-section">外觀</div>
     <label class="set-row"><span>深色模式</span><input type="checkbox" id="set-dark"></label>
 
+    <div class="set-section">其他</div>
+    <label class="set-row"><span>內容更新紀錄</span><button class="btn-next" id="log-open">📋 開啟工作日誌</button></label>
+
     <div class="set-section">語音</div>
     <label class="set-row"><span>日語語音</span><select id="set-voice"><option value="">自動（挑最佳）</option></select></label>
     <div class="set-hint" id="voice-now"></div>
@@ -58,7 +61,14 @@
   </div>
 </div>
 
-<script src="data.js?v=38e65419"></script>
-<script src="app.js?v=38e65419"></script>
+<div id="log-panel" class="hidden">
+  <div class="settings-box">
+    <div class="settings-head"><h3>📋 工作日誌</h3><button id="log-close" aria-label="關閉">✕</button></div>
+    <div id="log-body" class="log-body"></div>
+  </div>
+</div>
+
+<script src="data.js?v=f1bbe281"></script>
+<script src="app.js?v=f1bbe281"></script>
 </body>
 </html>
