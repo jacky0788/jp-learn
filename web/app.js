@@ -46,7 +46,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, minimal: false, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
+  { theme: null, minimal: false, fontScale: 100, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -57,12 +57,15 @@ function applyTheme() { document.body.classList.toggle("dark", settings.theme ==
 applyTheme();
 function applyMinimal() { document.body.classList.toggle("minimal", !!settings.minimal); }
 applyMinimal();
+function fontScaleVal() { const v = parseInt(settings.fontScale); return (isFinite(v) ? Math.max(70, Math.min(200, v)) : 100); }
+function applyFontScale() { document.documentElement.style.setProperty("--fs", fontScaleVal() / 100); }
+applyFontScale();
 // 側邊欄收合（桌機）：狀態存 localStorage，按鈕在側欄右緣中間
 let sideCollapsed = localStorage.getItem("jp_sidecollapsed") === "1";
 function applySideCollapsed() {
   document.body.classList.toggle("side-collapsed", sideCollapsed);
   const b = document.getElementById("side-toggle");
-  if (b) { b.textContent = sideCollapsed ? "▶" : "◀"; b.title = sideCollapsed ? "展開選單" : "收起選單"; }
+  if (b) b.title = sideCollapsed ? "展開選單" : "收起選單";   // 箭頭/文字交給 CSS ::before
 }
 function initSideToggle() {
   const b = document.getElementById("side-toggle");
@@ -78,6 +81,8 @@ function initSideToggle() {
 function syncSettingsUI() {
   const d = document.getElementById("set-dark"); if (d) d.checked = settings.theme === "dark";
   const mi = document.getElementById("set-minimal"); if (mi) mi.checked = !!settings.minimal;
+  const fr = document.getElementById("set-fontsize-range"); if (fr) fr.value = fontScaleVal();
+  const fn = document.getElementById("set-fontsize-num"); if (fn) fn.value = fontScaleVal();
   const r = document.getElementById("set-repeats"); if (r) r.value = numSet("repeats", 3);
   const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = numSet("repeatGap", 0.8);
   const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
@@ -94,6 +99,16 @@ function syncSettingsUI() {
   if (panel) panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
   const dark = document.getElementById("set-dark");
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
+  const setFont = (v) => {
+    settings.fontScale = Math.max(70, Math.min(200, parseInt(v) || 100));
+    saveSettings(); applyFontScale();
+    const fr = document.getElementById("set-fontsize-range"); if (fr) fr.value = settings.fontScale;
+    const fn = document.getElementById("set-fontsize-num"); if (fn) fn.value = settings.fontScale;
+  };
+  const frange = document.getElementById("set-fontsize-range");
+  if (frange) frange.oninput = () => setFont(frange.value);
+  const fnum = document.getElementById("set-fontsize-num");
+  if (fnum) fnum.onchange = () => setFont(fnum.value);
   const minimal = document.getElementById("set-minimal");
   if (minimal) minimal.onchange = () => {
     settings.minimal = minimal.checked; saveSettings(); applyMinimal();
