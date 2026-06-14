@@ -55,6 +55,8 @@ function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)
 function numSet(key, def) { const v = Number(settings[key]); return (isFinite(v) && v >= 0) ? v : def; }
 function applyTheme() { document.body.classList.toggle("dark", settings.theme === "dark"); }
 applyTheme();
+function applyMinimal() { document.body.classList.toggle("minimal", !!settings.minimal); }
+applyMinimal();
 
 function syncSettingsUI() {
   const d = document.getElementById("set-dark"); if (d) d.checked = settings.theme === "dark";
@@ -77,7 +79,7 @@ function syncSettingsUI() {
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
   const minimal = document.getElementById("set-minimal");
   if (minimal) minimal.onchange = () => {
-    settings.minimal = minimal.checked; saveSettings();
+    settings.minimal = minimal.checked; saveSettings(); applyMinimal();
     if (settings.minimal) {
       stopRadio(); stopReader();                          // 廣播/文章朗讀屬隱藏功能，一併停止
       const cur = LESSONS.find(l => lessonKey(l) === selectedKey);
