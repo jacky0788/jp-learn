@@ -408,15 +408,17 @@ body.dark #side-toggle { background: #1f232a; color: #cdd6e6; border-color: #333
   main { grid-area: main; max-width: none; margin: 0; padding: 22px 32px; overflow-y: auto; }
   /* 側欄收合鈕：固定在側欄右緣中間 */
   #side-toggle { display: flex; align-items: center; justify-content: center;
-    position: fixed; top: 50%; left: 250px; margin-left: -13px; transform: translateY(-50%);
-    width: 26px; height: 48px; z-index: 50; cursor: pointer;
-    background: #fff; color: #2b3a55; border: 1px solid #d8dee6; border-radius: 0 9px 9px 0;
-    font-size: 12px; box-shadow: 2px 0 8px rgba(0,0,0,.1); transition: left .15s; margin-top: 0; }
+    position: fixed; top: 50%; left: 250px; margin-left: -16px; transform: translateY(-50%);
+    width: 16px; height: 38px; z-index: 50; cursor: pointer;
+    background: #fff; color: #8a97ad; border: 1px solid #d8dee6; border-right: none;
+    border-radius: 7px 0 0 7px; font-size: 9px; box-shadow: -1px 0 4px rgba(0,0,0,.06);
+    transition: left .15s; margin-top: 0; padding: 0; }
   #side-toggle::before { content: "◀"; }                  /* 桌機：箭頭，覆蓋手機文字 */
-  #side-toggle:hover { background: #eef1f5; }
+  #side-toggle:hover { background: #eef1f5; color: #2b3a55; }
   body.side-collapsed { grid-template-columns: 0 1fr; }
   body.side-collapsed #lesson-picker { display: none; }
-  body.side-collapsed #side-toggle { left: 0; margin-left: 0; }
+  body.side-collapsed #side-toggle { left: 0; margin-left: 0; border-right: 1px solid #d8dee6;
+    border-left: none; border-radius: 0 7px 7px 0; }
   body.side-collapsed #side-toggle::before { content: "▶"; }
 }
 body.dark #lesson-picker { border-right-color: #333a44; }
