@@ -57,6 +57,23 @@ function applyTheme() { document.body.classList.toggle("dark", settings.theme ==
 applyTheme();
 function applyMinimal() { document.body.classList.toggle("minimal", !!settings.minimal); }
 applyMinimal();
+// 側邊欄收合（桌機）：狀態存 localStorage，按鈕在側欄右緣中間
+let sideCollapsed = localStorage.getItem("jp_sidecollapsed") === "1";
+function applySideCollapsed() {
+  document.body.classList.toggle("side-collapsed", sideCollapsed);
+  const b = document.getElementById("side-toggle");
+  if (b) { b.textContent = sideCollapsed ? "▶" : "◀"; b.title = sideCollapsed ? "展開選單" : "收起選單"; }
+}
+function initSideToggle() {
+  const b = document.getElementById("side-toggle");
+  if (!b) return;
+  b.onclick = () => {
+    sideCollapsed = !sideCollapsed;
+    localStorage.setItem("jp_sidecollapsed", sideCollapsed ? "1" : "0");
+    applySideCollapsed();
+  };
+  applySideCollapsed();
+}
 
 function syncSettingsUI() {
   const d = document.getElementById("set-dark"); if (d) d.checked = settings.theme === "dark";
@@ -1133,6 +1150,7 @@ if (!LESSONS.length) {
     '<p class="empty">還沒有資料。請先執行 <code>python scripts/build.py</code> 生成 data.js。</p>';
 } else {
   initSearch();
+  initSideToggle();
   renderPicker();
   renderActive();
 }
