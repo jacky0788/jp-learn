@@ -42,6 +42,11 @@ body.dark .set-row select { background: #1f232a; border-color: #3a3f47; color: #
 .set-hint { font-size: 12px; color: #8a97ad; padding: 4px 0 2px; }
 .set-hint.warn { color: #c0392b; }
 body.dark .set-hint.warn { color: #ff8a7a; }
+.set-note { font-size: 12px; line-height: 1.6; color: #5a6679; background: #f1f4f8;
+  border: 1px solid #dde3ec; border-radius: 8px; padding: 8px 10px; margin: 4px 0 2px; }
+.set-note b { color: #2b3a55; }
+body.dark .set-note { color: #b8c2d4; background: #2a3142; border-color: #3a4256; }
+body.dark .set-note b { color: #e6ecf5; }
 .tts-warn { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 200;
   width: min(560px, 94vw); background: #fff8e6; color: #5a4500; border: 1px solid #e8c96a;
   border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.6;
