@@ -19,7 +19,7 @@ header h1 { margin: 0 0 10px; font-size: 20px; }
 /* 設定面板 */
 .hidden { display: none !important; }
 #settings-panel, #log-panel { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.45);
-  display: flex; align-items: flex-start; justify-content: center; }
+  display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 32px 12px; }
 .log-body { max-height: 64vh; overflow-y: auto; padding-right: 4px; }
 .log-entry { margin-bottom: 12px; }
 .log-date { font-size: 13px; font-weight: 700; color: #2b3a55; background: #eef1f5;
@@ -27,9 +27,11 @@ header h1 { margin: 0 0 10px; font-size: 20px; }
 .log-entry ul { margin: 4px 0 0; padding-left: 20px; }
 .log-entry li { font-size: 14px; margin-bottom: 4px; line-height: 1.6; }
 body.dark .log-date { color: #cdd6e6; background: #2a303a; }
-.settings-box { background: #fff; margin-top: 64px; width: min(430px, 92vw); border-radius: 12px;
-  padding: 16px 20px 20px; box-shadow: 0 10px 36px rgba(0,0,0,.35); }
-.settings-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.settings-box { background: #fff; width: min(430px, 92vw); border-radius: 12px;
+  padding: 0 20px 20px; box-shadow: 0 10px 36px rgba(0,0,0,.35);
+  max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); overflow-y: auto; }
+.settings-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+  position: sticky; top: 0; background: #fff; padding-top: 16px; z-index: 2; }
 .settings-head h3 { margin: 0; color: #2b3a55; }
 #set-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
 .set-section { margin-top: 14px; margin-bottom: 2px; font-size: 13px; color: #8a97ad; font-weight: 600; }
@@ -79,6 +81,7 @@ body.dark .vex-jp { color: #e8eaee; }
 .flashcard.auto { cursor: default; }
 
 body.dark .settings-box { background: #232831; color: #e3e6ea; }
+body.dark .settings-head { background: #232831; }
 body.dark .settings-head h3 { color: #d7dde6; }
 body.dark .set-row { border-bottom-color: #3a3f47; }
 body.dark .set-row input[type=number] { background: #1f232a; border-color: #3a3f47; color: #e8eaee; }
