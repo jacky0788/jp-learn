@@ -547,6 +547,12 @@ function nextAuto() {
   autoPlay.idx++;
   if (autoPlay.idx >= autoPlay.deck.length) finishAuto(); else drawAuto();
 }
+function prevAuto() {                       // 回上一個（同一輪洗牌順序，不重洗）
+  if (autoPlay.idx <= 0) return;
+  autoPlay.paused = false; autoPlay.seq++; clearAutoTimers();
+  autoPlay.idx--;
+  drawAuto();
+}
 function speakTimes(text, times, done) {            // 連續朗讀同一字 times 次
   if (!window.speechSynthesis || !text) { if (done) done(); return; }
   const mySeq = autoPlay.seq;
@@ -579,6 +585,7 @@ function drawAuto() {
       ${c.pos ? `<div class="pos">${c.pos}</div>` : ""}
     </div>
     <div class="controls">
+      <button class="btn-next" id="auto-prev"${autoPlay.idx === 0 ? " disabled" : ""}>← 上一個</button>
       ${autoPlay.paused
       ? `<button class="btn-good" id="auto-resume">▶ 繼續</button>`
       : `<button class="btn-next" id="auto-pause">⏸ 暫停</button>`}
@@ -590,6 +597,8 @@ function drawAuto() {
   if (pb) pb.onclick = e => { e.stopPropagation(); speak(pb.dataset.say); };
   document.getElementById("auto-stop").onclick = stopAuto;
   document.getElementById("auto-next").onclick = nextAuto;
+  const prevBtn = document.getElementById("auto-prev");
+  if (prevBtn) prevBtn.onclick = prevAuto;
   const pauseBtn = document.getElementById("auto-pause");
   if (pauseBtn) pauseBtn.onclick = pauseAuto;
   const resumeBtn = document.getElementById("auto-resume");
@@ -667,6 +676,7 @@ function drawCard() {
       ` : `<div class="hint">點一下看答案 · ${c._lesson} · 熟練度 ${known}</div>`}
     </div>
     <div class="controls">
+      <button class="btn-next" id="prev"${cardIdx === 0 ? " disabled" : ""}>← 上一個</button>
       ${flipped
       ? `<button class="btn-bad" id="bad">還不熟</button>
          <button class="btn-good" id="good">記得了</button>
@@ -674,12 +684,13 @@ function drawCard() {
       : `<button class="btn-next" id="flip">翻面</button>
          <button class="btn-next" id="next">下一個 →</button>`}
     </div>
-    <div class="progress">${cardIdx + 1} / ${deck.length}　·　「還不熟／記得了」可按可不按，只想瀏覽就按「下一個」</div>`;
+    <div class="progress">${cardIdx + 1} / ${deck.length}　·　「還不熟／記得了」可按可不按，只想瀏覽就按「上一個／下一個」</div>`;
 
   document.getElementById("fc").onclick = () => { flipped = !flipped; drawCard(); };
   document.getElementById("start-auto").onclick = startAuto;
   document.getElementById("view-list").onclick = () => { cardsView = "list"; renderCards(); };
   document.getElementById("next").onclick = nextCard;
+  document.getElementById("prev").onclick = prevCard;
   const pb = root.querySelector(".play");
   if (pb) pb.onclick = e => { e.stopPropagation(); speak(pb.dataset.say); };
   if (flipped) {
@@ -694,6 +705,12 @@ function nextCard() {                       // 不評熟練度，單純跳下一
   cardIdx++; flipped = false;
   if (cardIdx >= deck.length) renderCards();
   else drawCard();
+}
+
+function prevCard() {                       // 回上一張（不重洗牌、不評熟練度）
+  if (cardIdx <= 0) return;
+  cardIdx--; flipped = false;
+  drawCard();
 }
 
 function grade(c, delta) {
