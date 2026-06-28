@@ -312,7 +312,7 @@ function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([
 let collapsedSubs = (() => {
   const stored = localStorage.getItem("jp_subcollapsed2");
   if (stored) return new Set(JSON.parse(stored));
-  const s = new Set(["文章:短文章", "文章:長文章"]);
+  const s = new Set(["文章:短文章", "文章:長文章", "会話:0"]);
   const bun = LESSONS.filter(l => (l._group || "文法") === "文法");
   if (bun.length) {
     const latestBook = bun[bun.length - 1].book || 0;
@@ -370,6 +370,16 @@ function renderGroupBody(box, g, items, forceOpen) {
       if (books.length > 1) sub("文法:" + bk, bk ? `第${bk}冊` : "其他", arr);
       else arr.forEach(l => appendLabel(box, l));
     });
+  } else if (g === "会話") {                 // 依課別分組（第N課；未分類放最後、預設收合）
+    const nums = [...new Set(items.map(l => l.lesson || 0))];
+    const tagged = nums.filter(n => n).sort((a, b) => a - b);
+    const order = tagged.concat(nums.indexOf(0) >= 0 ? [0] : []);
+    if (tagged.length) {
+      order.forEach(ln => sub("会話:" + ln, ln ? `第${ln}課` : "未分類",
+        items.filter(l => (l.lesson || 0) === ln)));
+    } else {
+      items.forEach(l => appendLabel(box, l));
+    }
   } else if (g === "文章") {                 // 廣播在最前，短／長文章預設收合
     items.filter(l => l._radio).forEach(l => appendLabel(box, l));
     sub("文章:短文章", "短文章（" + items.filter(l => l._article && !isLongArticle(l._article)).length + "）",
