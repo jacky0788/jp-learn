@@ -67,3 +67,54 @@
 - Windows 11；主 shell 為 PowerShell（也有 Bash 工具，POSIX 語法）。
 - TTS 限制：**iPhone Safari 只能用基本 Kyoko**（Apple 不開放 Siri 語音給網頁，硬限制）；電腦/Android 自動用較佳語音。**使用者已決定維持輕量化、不做音檔/雲端/WASM 語音方案——別再提語音升級。**
 - 使用者也有一份持久記憶在 `~/.claude/projects/.../memory/jp-learn-project.md`（更詳細的歷史脈絡），可一併參考。
+
+---
+
+## 🧱 技術架構與工作邏輯（深入）
+
+### 技術棧
+- **純前端 PWA**：原生 HTML/CSS/JS，**零框架、零打包、零 npm**。`web/` 直接就是網站。
+- **資料層**：YAML（唯一真實來源）。建置腳本 **Python 3 + PyYAML**（唯一執行期相依；`qrcode` 為啟動器選用）。
+- **離線**：Service Worker（network-first）＋ manifest＝可安裝、可離線的 PWA。
+- **部署**：GitHub Actions → GitHub Pages（push main 自動建置發佈）。
+- **儲存**：全部狀態存瀏覽器 `localStorage`，無後端、無資料庫、無帳號、無追蹤碼。
+
+### 核心資料流（單向）
+```
+data/**/*.yaml ──python scripts/build.py──▶ web/data.js (window.LESSONS / ARTICLES / CHANGELOG)
+                                        └──▶ exports/anki_*.tsv (Anki 牌組)
+web/index.html ──載入──▶ data.js + app.js + style.css ──▶ 純前端渲染（讀 LESSONS 畫 UI）
+```
+**關鍵：網頁從不讀 YAML，只讀 build 產出的 `web/data.js`。改完 YAML 一定要重跑 build 才會生效。** `web/data.js` 是產物，已 gitignore（雲端部署時自動重建）。
+
+### build.py 做的事（`scripts/build.py`，約 360 行）
+- `load_lessons()`：讀 lessons/kaiwa/kiso 三資料夾 → 每檔 `_load_one()` 補欄位：`_group`(文法/会話/基礎，可由 `track:` 覆寫)、`_file`、`_code`、`_label`、動詞 `_vgroup`(I/II/III，由 `verb_group()`/`classify_verb()` 判定)。排序鍵＝`(GROUP_RANK, book, lesson, order, file)`。
+- `load_articles()`→`window.ARTICLES`；`load_changelog()`→`window.CHANGELOG`。
+- `build_web()`：把三者 `json.dumps(ensure_ascii=False)` 寫成 `web/data.js`。
+- `build_anki()`：產 `exports/anki_vocab.tsv`、`anki_grammar.tsv`（`item_tags()` 把 source/key 轉 Anki 標籤）。
+- `stamp_version()`：算 `data.js+app.js+style.css` 的 **sha1 前 8 碼**，戳進 `index.html` 的 `?v=` 與 `sw.js` 的 `CACHE="jp-learn-<hash>"`。**內容沒變→版本不變→不會多寫檔；內容變→快取必更新。不要手動改版本。**
+- `lint_lessons()`：內容完整性檢查（缺 title/intro/goals、例句缺 jp/kana/zh、practice 缺 q/a、表格欄數不符、單元測驗<6 題…），build 結尾印「⚠️提醒」或「全部通過✅」。**不中斷 build，但提醒就要補。**
+- `main()` 開頭 `sys.stdout.reconfigure(utf-8)`，避免 Windows console 遇 emoji/日文崩潰。
+
+### 前端 app.js 運作邏輯（`web/app.js`，約 1200 行，單檔無模組）
+啟動時：`LESSONS = window.LESSONS ＋ ARTICLE_LESSONS(文章包成偽課) ＋ RADIO_LESSON(廣播偽課)`，全部排序後共用同一套選課/分頁機制。
+- **選課**：一次只選一課 `selectedKey`（預設＝最新文法課）。`renderPicker()` 畫左側選單：群組切換列(`GROUPS` 文法/会話/基礎/文章) → `renderGroupBody()` 依群組細分（文法依`book`冊、**會話依`lesson`課**、文章分短/長＋廣播）。可收合子分類、可搜尋(`lessonHaystack` 快取)。
+- **分頁**：`updateTabs()` 依「該課有什麼內容」動態顯示分頁（有 vocab→單字卡、有 grammar→文法、文章→read…）。`renderActive()` 依 `currentTab` 呼叫對應 render。
+- **五大檢視**：`renderIntro`(說明/導讀)、`renderCards`/`drawCard`(單字卡＋SRS)、`renderGrammar`(講義版面：接続/explain/`tableHtml`圖解/例/practice)、`drawQuiz`(中→日測驗)、`renderArticle`(文章朗讀)。
+- **狀態機（共用守衛）**：自動播放 `autoPlay`、廣播 `radio`、朗讀 `reader` 各有 `seq` 序號，切換/停止時 `seq++` 讓殘留的 `setTimeout`/`utterance.onend` 失效，避免非同步回呼亂跳。
+- **TTS**：`jaVoice()` 用 `voiceScore()` 挑最佳日語語音（Siri+110/Google+100/Kyoko 85/compact-80…），`settings.voiceName` 可指定；`stripSymbols()` 過濾不該唸的符號；手機需 `refreshVoices()` 多次補抓。
+- **圖解表格**：`cellHtml()` 解析 `[標色]` 與 `{{漢字|假名}}` ruby；表格每格可點發音(`cellSayText` 去 rt 留漢字)。
+
+### localStorage 鍵（清快取/除錯時參考）
+`jp_srs`(單字熟練度) · `jp_settings`(所有設定) · `jp_playlist`(廣播清單) · `jp_collapsed`/`jp_subcollapsed2`(選單收合) · `jp_sidecollapsed`(側欄收合)。
+
+### PWA / 版本 / 更新流程
+- `sw.js`：**network-first**——有網路抓最新並更新快取，離線時回退快取（最後回退 `index.html`）。`CACHE` 名含內容雜湊，`activate` 時刪舊快取。
+- `index.html` 對 data.js/app.js/style.css 加 `?v=<hash>`；app.js 末尾註冊 SW 並監聽到新版自動 reload。→ 使用者永遠拿到最新版，不會卡舊快取。
+
+### 部署（`.github/workflows/deploy.yml`）
+push main → Actions：checkout → setup-python → `pip install pyyaml` → `python scripts/build.py` → 只上傳 `web/`(不含任何照片) 到 Pages。**雲端會自己 build，所以 `web/data.js` 不進版控也沒關係。**
+
+### 本機開發/啟動
+- 預覽用 `.claude/launch.json` 的 `python http.server 5599` 服務 `web/`（或用本對話的 preview 工具）。
+- 跨平台啟動器 `start.bat`/`start.sh`/`start.py`：偵測 Python→自動裝缺套件→build→起 `0.0.0.0:5599`（no-cache）→印出區網 URL＋QR code 給手機掃。
