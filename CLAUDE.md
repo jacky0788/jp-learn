@@ -51,6 +51,9 @@
 - `data/kiso/<topic>.yaml`：**基礎文法**（自學補充），需 `track:基礎`。代碼 `G-<topic>`。
 - `data/articles/*.yaml`：**文章**（朗讀/廣播用），每篇 `title/level/order/intro/body[{jp,kana,zh}]`。
 - 共用：每課要有 `intro`(導讀)＋`goals`(目標)；文法用 `setsuzoku/explain/examples/practice` 還原講義版面；圖解用 `table`（cell 支援 `[標色]` 與 `{{漢字|假名}}` ruby）。詳見 `SCHEMA.md`。
+- ⭐ **注音總則（專案規格）**：**所有日文漢字都要盡可能標上平假名**，使用者可用「設定→假名顯示方式」自行調整（line／ruby／off）。
+  絕大多數是自動的——**你只要把 `kana` 寫正確**；標不到的用 `{{漢字|假名}}` 手寫在 `jp`，讀音誤標則修 `data/readings.yaml`。
+  完整規範（含三種顯示模式對照、安全規則、防洩題、`readings.yaml` 鍵格式、build 後要檢查什麼）寫在 **`SCHEMA.md` 的〈⭐ 漢字注音（ふりがな）規範〉**。
 
 ---
 
