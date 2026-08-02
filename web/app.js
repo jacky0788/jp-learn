@@ -576,8 +576,16 @@ function renderActive() {
 }
 
 // ---- 說明（導讀 / 學習目標 / 重點）----
+// 說明／目標／筆記共用的行內格式：{{漢字|假名}} 注音（受設定控管）＋ **粗體**
+function mdInline(t) {
+  return String(t == null ? "" : t)
+    .replace(/\{\{([^|{}]+)\|([^{}]+)\}\}/g,
+      kanaMode() === "off" ? "$1" : "<ruby>$1<rt>$2</rt></ruby>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+}
 function mdParagraphs(s) {
-  return String(s).split(/\n\s*\n/).map(p => `<p>${p.trim().replace(/\n/g, "<br>")}</p>`).join("");
+  // 說明文可以手寫 {{漢字|假名}}；「不顯示假名」時只留漢字
+  return String(s).split(/\n\s*\n/).map(p => `<p>${mdInline(p.trim().replace(/\n/g, "<br>"))}</p>`).join("");
 }
 
 function renderIntro() {
@@ -588,8 +596,8 @@ function renderIntro() {
     <div class="intro-card">
       <h2>${lessonLabel(l)}　${l.title || ""}</h2>
       ${l.intro ? `<div class="intro-text">${mdParagraphs(l.intro)}</div>` : ""}
-      ${(l.goals && l.goals.length) ? `<h4>學習目標</h4><ul class="goals">${l.goals.map(g => `<li>${g}</li>`).join("")}</ul>` : ""}
-      ${(l.notes && l.notes.length) ? `<h4>重點筆記</h4><ul>${l.notes.map(n => `<li>${n}</li>`).join("")}</ul>` : ""}
+      ${(l.goals && l.goals.length) ? `<h4>學習目標</h4><ul class="goals">${l.goals.map(g => `<li>${mdInline(g)}</li>`).join("")}</ul>` : ""}
+      ${(l.notes && l.notes.length) ? `<h4>重點筆記</h4><ul>${l.notes.map(n => `<li>${mdInline(n)}</li>`).join("")}</ul>` : ""}
     </div>`).join("");
 }
 
