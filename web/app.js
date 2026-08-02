@@ -93,6 +93,13 @@ function jpHtml(item) {  // 依設定決定 jp 要不要帶注音（測驗頁一
 }
 // 有實際標到注音才加 has-ruby：標不到的句子（如含數字）保留整句假名當後備，不會變成無讀音
 function rubyCls(item) { return (kanaMode() === "ruby" && item && item._ruby) ? " has-ruby" : ""; }
+// 練習題／接続／標題等沒有 kana 欄的文字：這些沒有「整句假名」可放，
+// 所以比照圖解表格——只要不是「不顯示假名」就標注音
+function txt(item, key, rkey) {
+  const raw = (item && item[key]) || "";
+  if (kanaMode() !== "off" && item && item[rkey]) return jpRuby(item[rkey]);
+  return escHtml(raw);
+}
 applyTheme();
 function applyMinimal() { document.body.classList.toggle("minimal", !!settings.minimal); }
 applyMinimal();
@@ -966,10 +973,12 @@ function renderGrammar() {
     pts.forEach((g, gi) => {
       const on = gramOpen.has(gramKey(l, gi));
       html += `<div class="gram-item${on ? "" : " folded"}" id="${gidOf(gi)}">
-        <h3 class="gram-h" data-gk="${gramKey(l, gi)}"><span class="caret">${on ? "▼" : "▶"}</span> ${g.point || ""}${badges(g)}</h3>
+        <h3 class="gram-h" data-gk="${gramKey(l, gi)}"><span class="caret">${on ? "▼" : "▶"}</span> ${txt(g, "point", "_rpoint")}${badges(g)}</h3>
         <div class="gram-body">`;
       if (g.setsuzoku && g.setsuzoku.length)
-        html += `<div class="block"><span class="blabel">接続</span><ul class="setsuzoku">${g.setsuzoku.map(s => `<li>${s}</li>`).join("")}</ul></div>`;
+        html += `<div class="block"><span class="blabel">接続</span><ul class="setsuzoku">${
+          (kanaMode() !== "off" && g._rsetsuzoku ? g._rsetsuzoku.map(jpRuby) : g.setsuzoku.map(escHtml))
+            .map(s => `<li>${s}</li>`).join("")}</ul></div>`;
       if (g.explain)
         html += `<div class="block"><span class="blabel">説明</span><div class="explain">${mdParagraphs(g.explain)}</div></div>`;
       if (g.table) html += tableHtml(g.table);
@@ -980,7 +989,7 @@ function renderGrammar() {
         const pid = `pr_${lessonKey(l)}_${gi}`;
         html += `<div class="block"><span class="blabel">練習</span>${g.practice_note ? `<span class="pnote">${g.practice_note}</span>` : ""} <button class="link toggle-ans" data-t="${pid}">顯示/隱藏答案</button>
           <ol class="practice" id="${pid}">${g.practice.map(p => `
-            <li><span class="pq">${p.q || ""}</span> <span class="ans">${p.a || ""}</span>${p.note ? `<span class="ans-note">（${p.note}）</span>` : ""}</li>`).join("")}</ol></div>`;
+            <li><span class="pq">${txt(p, "q", "_rq")}</span> <span class="ans">${txt(p, "a", "_ra")}</span>${p.note ? `<span class="ans-note">（${escHtml(p.note)}）</span>` : ""}</li>`).join("")}</ol></div>`;
       }
       html += `</div></div>`;      // /gram-body /gram-item
     });

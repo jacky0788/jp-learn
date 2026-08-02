@@ -553,6 +553,9 @@ def main():
         sys.exit("找不到任何課程資料（data/lessons/*.yaml）")
     articles = load_articles()
     assign_ruby(RUBY_STATS)          # 全部載入後再統一標注音（第二階段要用全域佐證字典）
+    load_extra_readings()            # 人工補充讀音（data/readings.yaml）
+    build_text_lexicon(lessons, articles)
+    annotate_lessons(lessons)        # 練習題／接続／標題／表格也補注音
     web_out = build_web(lessons, articles)
     ver = stamp_version()
     nv, ng = build_anki(lessons)
@@ -586,6 +589,144 @@ def main():
     print("Anki：匯入 exports/*.tsv（匯入時欄位選 製表符 / Tab 分隔）")
 
 
+# ==== 沒有 kana 欄的欄位（練習題／接続／文法點標題／表格）也標注音 ====
+# 做法：從已標好的 _ruby 學一份「漢字段→讀音」字典，再對這些文字做「整段」匹配。
+# ⚠️ 安全鐵則（比對齊法更嚴）：
+#   ① 只在「整段漢字」完整命中字典時才標，**絕不逐字硬拆**
+#      （否則中文句子如「前面用辭書形還是」會被拆成「前(まえ)面用…」這種荒謬結果）
+#   ② 同一漢字段有多種讀音、且送假名也無法區分時 → 不標
+#   ③ 答案是純假名的題目＝在考讀音，題目不標（否則直接洩答案，如「1本 的唸法？」）
+KANA_CLS = "ぁ-ゖァ-ヺー"
+TEXT_LEX = {"ctx": {}, "plain": {}}
+EXTRA_READINGS = {}          # 人工補充（見 data/readings.yaml）
+
+
+def load_extra_readings():
+    f = ROOT / "data" / "readings.yaml"
+    if not f.exists():
+        return
+    with open(f, encoding="utf-8") as fp:
+        d = yaml.safe_load(fp) or {}
+    EXTRA_READINGS.update({str(k): str(v) for k, v in d.items() if k and v})
+
+
+def build_text_lexicon(lessons, articles):
+    from collections import defaultdict
+    ctx, plain = defaultdict(lambda: defaultdict(int)), defaultdict(lambda: defaultdict(int))
+
+    def learn(mk):
+        parts = re.split(r"(\{\{[^|{}]+\|[^{}]+\}\})", mk or "")
+        for i, p in enumerate(parts):
+            m = re.fullmatch(r"\{\{([^|{}]+)\|([^{}]+)\}\}", p or "")
+            if not m:
+                continue
+            nxt = ""
+            for q in parts[i + 1:]:
+                if q and not q.startswith("{{"):
+                    nxt = re.match(r"^[%s]{0,2}" % KANA_CLS, q).group()
+                    break
+                if q:
+                    break
+            ctx[(m.group(1), nxt)][m.group(2)] += 1
+            plain[m.group(1)][m.group(2)] += 1
+
+    def scan(o):
+        if isinstance(o, dict) and o.get("_ruby"):
+            learn(o["_ruby"])
+    for l in lessons:
+        for v in l.get("vocab") or []:
+            if isinstance(v, dict):
+                scan(v); scan(v.get("ex"))
+        for g in l.get("grammar") or []:
+            for ex in (g.get("examples") or []):
+                scan(ex)
+    for a in articles:
+        for s in a.get("body") or []:
+            scan(s)
+    TEXT_LEX["ctx"] = {k: max(v, key=v.get) for k, v in ctx.items() if len(v) == 1}
+    TEXT_LEX["plain"] = {k: max(v, key=v.get) for k, v in plain.items() if len(v) == 1}
+
+
+def annotate_text(t):
+    """把文字中『能確定讀音的整段漢字』加上 {{漢字|假名}}；不確定就原樣保留"""
+    if not t or RUBY_RE.search(t):
+        return t, 0, 0
+    hit = miss = 0
+    out, last = [], 0
+    for m in re.finditer(r"[%s]+" % KANJI_R, t):
+        seg = m.group()
+        nxt = re.match(r"^[%s]{0,2}" % KANA_CLS, t[m.end():]).group()
+        prev = t[m.start() - 1] if m.start() else ""
+        after_num = bool(re.match(r"[0-9０-９]", prev))        # 數字後面＝量詞，要用音讀
+        # 優先順序：數字後量詞 → 語料的送假名context → 人工(帶送假名) → 人工 → 語料唯一讀音
+        rd = (EXTRA_READINGS.get("#" + seg) if after_num else None) \
+            or TEXT_LEX["ctx"].get((seg, nxt)) \
+            or EXTRA_READINGS.get(seg + "|" + nxt[:1]) \
+            or EXTRA_READINGS.get(seg) \
+            or TEXT_LEX["plain"].get(seg)
+        if after_num and not EXTRA_READINGS.get("#" + seg) and seg in ("時", "人", "日", "月", "分", "本", "回", "個"):
+            rd = None                                          # 量詞讀音會變（1本→いっぽん），不確定就不標
+        out.append(t[last:m.start()])
+        if rd:
+            out.append("{{%s|%s}}" % (seg, rd)); hit += 1
+        else:
+            out.append(seg); miss += 1
+        last = m.end()
+    out.append(t[last:])
+    return "".join(out), hit, miss
+
+
+def is_reading_quiz(q, a):
+    """這題是不是在考『怎麼唸』？是的話題目不能標注音，否則直接洩答案。"""
+    if re.search(r"唸法|読み方|よみかた|怎麼唸|如何唸|發音|读法", q or ""):
+        return True
+    # 題目只有「數字＋量詞」而答案是純假名（例：1本 的唸法？→ いっぽん）
+    a2 = re.sub(r"[\s　。、！？!?・（）()「」/／×○]", "", a or "")
+    return bool(a2) and bool(re.fullmatch(r"[%s]+" % KANA_CLS, a2)) \
+        and bool(re.search(r"[0-9０-９][%s]" % KANJI_R, q or ""))
+
+
+def annotate_lessons(lessons):
+    """對練習題／接続／文法點標題／表格格子補注音（原欄位保持乾淨，另存 _r* 欄）"""
+    hit = miss = 0
+
+    def do(o, key, dst):
+        nonlocal hit, miss
+        v = o.get(key)
+        if not isinstance(v, str) or not re.search(r"[%s]" % KANJI_R, v):
+            return
+        a, h, m = annotate_text(v)
+        if h:
+            o[dst] = a
+        hit += h; miss += m
+
+    for l in lessons:
+        for g in l.get("grammar") or []:
+            if not isinstance(g, dict):
+                continue
+            do(g, "point", "_rpoint")
+            if g.get("setsuzoku"):
+                rs = [annotate_text(s) for s in g["setsuzoku"]]
+                if any(x[1] for x in rs):
+                    g["_rsetsuzoku"] = [x[0] for x in rs]
+                hit += sum(x[1] for x in rs); miss += sum(x[2] for x in rs)
+            for p in (g.get("practice") or []):
+                # 考「怎麼唸」的題目：題目不標，否則直接洩答案
+                if not is_reading_quiz(p.get("q"), p.get("a")):
+                    do(p, "q", "_rq")
+                do(p, "a", "_ra")
+            tb = g.get("table")
+            if tb and tb.get("rows"):
+                rows = [[annotate_text(c)[0] for c in row] for row in tb["rows"]]
+                tb["rows"] = rows
+                if tb.get("headers"):
+                    tb["headers"] = [annotate_text(c)[0] for c in tb["headers"]]
+                if tb.get("caption"):
+                    tb["caption"] = annotate_text(tb["caption"])[0]
+    RUBY_STATS["text_hit"] = hit
+    RUBY_STATS["text_miss"] = miss
+
+
 def report_ruby():
     """漢字注音統計＋待補清單（nomatch 多半代表 kana 寫錯，要優先修）"""
     s = RUBY_STATS
@@ -605,6 +746,10 @@ def report_ruby():
             print("      [%s] %s ／ %s" % (src, jp, kana))
     if amb:
         print("   ℹ️ 有歧義 %d 句已自動略過注音（多為數字），可用 {{漢字|假名}} 手動補。" % amb)
+    th, tm = s.get("text_hit", 0), s.get("text_miss", 0)
+    if th or tm:
+        print("   📝 練習題／接続／標題／表格：已標 %d 段、未標 %d 段（未標多為中文敘述，本來就不該注音）"
+              % (th, tm))
 
 
 if __name__ == "__main__":
