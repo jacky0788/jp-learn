@@ -360,6 +360,11 @@ function appendLabel(box, l) {
   box.appendChild(label);
 }
 
+function classDate(d) {   // "2026-07-17" → "7/17 上課"
+  const m = String(d || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${+m[2]}/${+m[3]} 上課` : String(d || "");
+}
+
 let activeGroup = null;   // 目前選的群組（文法/会話/基礎/文章）
 function subHeader(box, text) {
   const sh = document.createElement("span");
@@ -389,13 +394,15 @@ function renderGroupBody(box, g, items, forceOpen) {
       if (books.length > 1) sub("文法:" + bk, bk ? `第${bk}冊` : "其他", arr);
       else arr.forEach(l => appendLabel(box, l));
     });
-  } else if (g === "会話") {                 // 依課別分組（第N課；未分類放最後、預設收合）
-    const nums = [...new Set(items.map(l => l.lesson || 0))];
-    const tagged = nums.filter(n => n).sort((a, b) => a - b);
-    const order = tagged.concat(nums.indexOf(0) >= 0 ? [0] : []);
-    if (tagged.length) {
-      order.forEach(ln => sub("会話:" + ln, ln ? `第${ln}課` : "未分類",
-        items.filter(l => (l.lesson || 0) === ln)));
+  } else if (g === "会話") {   // 先依課本課別（第N課），再依上課日期，剩下的收在「未分類」
+    const byLesson = [...new Set(items.filter(l => l.lesson).map(l => l.lesson))].sort((a, b) => a - b);
+    const byDate = [...new Set(items.filter(l => !l.lesson && l.date).map(l => l.date))].sort();
+    const rest = items.filter(l => !l.lesson && !l.date);
+    if (byLesson.length || byDate.length) {
+      byLesson.forEach(ln => sub("会話:L" + ln, `第${ln}課`, items.filter(l => l.lesson === ln)));
+      byDate.forEach(d => sub("会話:D" + d, "📅 " + classDate(d),
+        items.filter(l => !l.lesson && l.date === d)));
+      if (rest.length) sub("会話:0", "未分類", rest);
     } else {
       items.forEach(l => appendLabel(box, l));
     }

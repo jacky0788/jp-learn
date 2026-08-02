@@ -44,7 +44,9 @@
 
 - `data/lessons/B<冊>L<課>.yaml`：**文法課**（依冊/課），需 `book`+`lesson`。代碼 `B?L??`。
 - `data/kaiwa/<topic>.yaml`：**會話課**（依文法主題），需 `track:会話`、`topic`、`order`、`label`、`title`。代碼 `K-<topic>`。
-  - **會話課依課別分類**（2026-06 新慣例）：可加 `lesson:` 欄位＝課本課號。選單會話課會依「第N課」分組（同文法課依冊），未分類(無 lesson)收在「未分類」（預設收合）。
+  - **會話課依課別／上課日期分類**：可加 `lesson:` 欄位＝課本課號，或 `date:` 欄位＝上課日期（`YYYY-MM-DD`）。
+    選單順序＝**第N課（依 lesson）→ 📅 日期（依 date）→ 未分類**（三者都無的收這裡，預設收合）。
+    對不上課本課號的板書內容（例：自由主題的會話課）就用 `date:` 標上課日期。
   - 使用者會「拍某課課本內容」→ 用課本文法/主題判定哪些既有 kaiwa 主題屬該課，加 `lesson` 欄位＋補該課新內容。已標：第17課=能力経験/どのぐらい/可能形；第18課=誘い(mashouka)/推測伝聞。
 - `data/kiso/<topic>.yaml`：**基礎文法**（自學補充），需 `track:基礎`。代碼 `G-<topic>`。
 - `data/articles/*.yaml`：**文章**（朗讀/廣播用），每篇 `title/level/order/intro/body[{jp,kana,zh}]`。
