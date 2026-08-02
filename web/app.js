@@ -46,7 +46,8 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, minimal: false, fontScale: 100, kanaMode: "line", repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
+  { theme: null, minimal: false, fontScale: 100, kanaMode: "line", quizLen: 20, cardLen: 20,
+    repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -77,7 +78,10 @@ function fontScaleVal() { const v = parseInt(settings.fontScale); return (isFini
 function applyFontScale() { document.documentElement.style.setProperty("--fs", fontScaleVal() / 100); }
 applyFontScale();
 // 側邊欄收合（桌機）：狀態存 localStorage，按鈕在側欄右緣中間
-let sideCollapsed = localStorage.getItem("jp_sidecollapsed") === "1";
+// 手機預設收合選單（螢幕小，選好課後選單就不常用了）；使用者手動切換過就記住他的選擇
+let sideCollapsed = (localStorage.getItem("jp_sidecollapsed") === null)
+  ? window.innerWidth < 900
+  : localStorage.getItem("jp_sidecollapsed") === "1";
 function applySideCollapsed() {
   document.body.classList.toggle("side-collapsed", sideCollapsed);
   const b = document.getElementById("side-toggle");
@@ -100,6 +104,8 @@ function syncSettingsUI() {
   const fr = document.getElementById("set-fontsize-range"); if (fr) fr.value = fontScaleVal();
   const fn = document.getElementById("set-fontsize-num"); if (fn) fn.value = fontScaleVal();
   const km = document.getElementById("set-kana"); if (km) km.value = kanaMode();
+  const ql = document.getElementById("set-quizlen"); if (ql) ql.value = String(quizLen());
+  const cl = document.getElementById("set-cardlen"); if (cl) cl.value = String(cardLen());
   const r = document.getElementById("set-repeats"); if (r) r.value = numSet("repeats", 3);
   const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = numSet("repeatGap", 0.8);
   const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
@@ -118,6 +124,10 @@ function syncSettingsUI() {
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
   const kana = document.getElementById("set-kana");
   if (kana) kana.onchange = () => { settings.kanaMode = kana.value; saveSettings(); applyKanaMode(); renderActive(); };
+  const qlen = document.getElementById("set-quizlen");
+  if (qlen) qlen.onchange = () => { settings.quizLen = parseInt(qlen.value) || 0; saveSettings(); quizKey = null; renderActive(); };
+  const clen = document.getElementById("set-cardlen");
+  if (clen) clen.onchange = () => { settings.cardLen = parseInt(clen.value) || 0; saveSettings(); renderActive(); };
   const setFont = (v) => {
     settings.fontScale = Math.max(70, Math.min(200, parseInt(v) || 100));
     saveSettings(); applyFontScale();
@@ -345,11 +355,27 @@ function pickerLabel(l) {   // 文章選單只顯示日文標題（去掉中文�
   if (l._article) { const t = (l._label || "").replace(/（[^）]*）/g, "").trim(); return t || l._label; }
   return lessonLabel(l);
 }
+// 該課單字熟練度（熟練＝SRS 分數 ≥3）；沒有單字的課回傳 null
+function lessonProgress(l) {
+  const vs = l.vocab || [];
+  if (!vs.length) return null;
+  let known = 0;
+  vs.forEach((v, i) => { if ((ST[lessonKey(l) + ":v" + i]?.score || 0) >= 3) known++; });
+  return { known, total: vs.length, pct: Math.round(known / vs.length * 100) };
+}
+
 function appendLabel(box, l) {
   const key = lessonKey(l);
   const label = document.createElement("label");
   label.className = (key === selectedKey ? "on" : "") + (l._radio && radio.on ? " playing" : "");
   label.textContent = pickerLabel(l);
+  const pr = lessonProgress(l);          // 進度小圓點：空心=沒碰過、半滿、實心=已熟
+  if (pr) {
+    const dot = document.createElement("span");
+    dot.className = "prog " + (pr.pct >= 80 ? "p3" : pr.pct >= 40 ? "p2" : pr.pct > 0 ? "p1" : "p0");
+    dot.title = `單字熟練 ${pr.known}/${pr.total}（${pr.pct}%）`;
+    label.appendChild(dot);
+  }
   label.onclick = () => {
     if (key === selectedKey) return;
     selectedKey = key;
@@ -553,12 +579,14 @@ function shuffle(arr) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
+function cardLen() { const v = parseInt(settings.cardLen); return isFinite(v) && v > 0 ? v : 0; }  // 0＝全部
 function buildDeck() {
   const items = vocabItems();
   // 依熟練度排序：陌生(低分)優先，並做加權打散
   items.forEach(it => { it._w = (ST[it._id]?.score || 0) + Math.random() * 0.5; });
   items.sort((a, b) => a._w - b._w);
-  return items;
+  const n = cardLen();
+  return (n && items.length > n) ? items.slice(0, n) : items;   // 只取最該複習的前 N 張
 }
 
 // ---- 自動隨機播放 ----
@@ -739,8 +767,31 @@ function drawCard() {
 
 function nextCard() {                       // 不評熟練度，單純跳下一張
   cardIdx++; flipped = false;
-  if (cardIdx >= deck.length) renderCards();
+  if (cardIdx >= deck.length) finishCardRound();
   else drawCard();
+}
+
+// 本輪單字卡跑完：顯示整課熟練度，可續下一批
+function finishCardRound() {
+  const root = document.getElementById("cards");
+  const all = vocabItems();
+  const known = all.filter(v => (ST[v._id]?.score || 0) >= 3).length;
+  const pct = all.length ? Math.round(known / all.length * 100) : 0;
+  const more = all.length > deck.length;
+  root.innerHTML = `
+    <div class="quiz-result">
+      <div class="qr-score ${pct >= 80 ? "good" : pct >= 60 ? "mid" : "bad"}">${pct}<span>%</span></div>
+      <div class="qr-sub">本輪 ${deck.length} 張看完了　·　整課熟練 <b>${known}</b> / ${all.length} 個單字</div>
+    </div>
+    <div class="controls">
+      ${more ? `<button class="btn-good" id="card-next-batch">▶ 繼續下一批</button>` : ""}
+      <button class="btn-next" id="card-restart">🔀 再看一輪</button>
+      <button class="btn-next" id="card-list">📋 全部單字＋例句</button>
+    </div>`;
+  const nb = document.getElementById("card-next-batch");
+  if (nb) nb.onclick = () => renderCards();
+  document.getElementById("card-restart").onclick = () => renderCards();
+  document.getElementById("card-list").onclick = () => { cardsView = "list"; renderCards(); };
 }
 
 function prevCard() {                       // 回上一張（不重洗牌、不評熟練度）
@@ -754,7 +805,7 @@ function grade(c, delta) {
   rec.score = Math.max(-3, Math.min(5, rec.score + delta));
   ST[c._id] = rec; save();
   cardIdx++; flipped = false;
-  if (cardIdx >= deck.length) { renderCards(); } else { drawCard(); }
+  if (cardIdx >= deck.length) { finishCardRound(); } else { drawCard(); }
 }
 
 // ---- 圖解表格（cell 支援 [x] 標色變化處、{{漢字|假名}} ruby 注音）----
@@ -791,21 +842,37 @@ function cellSayText(td) {
 }
 
 // ---- 文法（講義版面：接続 / 説明 / 圖解 / 例 / 練習）----
+// 文法點過多時預設收合，點標題展開（狀態記在本次工作階段，切分頁不會跑掉）
+const gramOpen = new Set();
+let gramInit = new Set();          // 已套過預設值的課，避免每次 render 都重設
+function gramKey(l, gi) { return lessonKey(l) + "#" + gi; }
+const COLLAPSE_FROM = 4;           // 文法點 ≥ 這個數量就預設收合
+
 function renderGrammar() {
   const root = document.getElementById("grammar");
   const ls = activeLessons().filter(l => (l.grammar || []).length);
   if (!ls.length) { root.innerHTML = '<p class="empty">這些課還沒有文法資料。</p>'; return; }
   let html = "";
   ls.forEach(l => {
-    html += `<h2 class="lesson-h">${lessonLabel(l)}　${l.title || ""}</h2>`;
     const pts = l.grammar || [];
+    const k = lessonKey(l);
+    if (!gramInit.has(k)) {          // 第一次進這一課：決定預設展開或收合
+      gramInit.add(k);
+      if (pts.length < COLLAPSE_FROM) pts.forEach((_, gi) => gramOpen.add(gramKey(l, gi)));
+    }
+    const openCnt = pts.filter((_, gi) => gramOpen.has(gramKey(l, gi))).length;
+    html += `<h2 class="lesson-h">${lessonLabel(l)}　${l.title || ""}</h2>`;
     const gidOf = gi => `g_${lessonKey(l)}_${gi}`;
-    if (pts.length >= 4) {                 // 文法點多時，頂端放小目錄可跳轉
+    if (pts.length >= COLLAPSE_FROM) {     // 文法點多時：小目錄可跳轉 ＋ 全部展開/收合
       html += `<div class="gram-toc">${pts.map((g, gi) =>
-        `<button class="toc-chip" data-go="${gidOf(gi)}">${(g.point || "").replace(/^🔖\s*/, "")}</button>`).join("")}</div>`;
+        `<button class="toc-chip" data-go="${gidOf(gi)}" data-gi="${gi}">${(g.point || "").replace(/^🔖\s*/, "")}</button>`).join("")}
+        <button class="toc-chip toc-all" data-all="${openCnt >= pts.length ? "close" : "open"}" data-lk="${k}">${openCnt >= pts.length ? "▲ 全部收合" : "▼ 全部展開"}</button></div>`;
     }
     pts.forEach((g, gi) => {
-      html += `<div class="gram-item" id="${gidOf(gi)}"><h3>${g.point || ""}${badges(g)}</h3>`;
+      const on = gramOpen.has(gramKey(l, gi));
+      html += `<div class="gram-item${on ? "" : " folded"}" id="${gidOf(gi)}">
+        <h3 class="gram-h" data-gk="${gramKey(l, gi)}"><span class="caret">${on ? "▼" : "▶"}</span> ${g.point || ""}${badges(g)}</h3>
+        <div class="gram-body">`;
       if (g.setsuzoku && g.setsuzoku.length)
         html += `<div class="block"><span class="blabel">接続</span><ul class="setsuzoku">${g.setsuzoku.map(s => `<li>${s}</li>`).join("")}</ul></div>`;
       if (g.explain)
@@ -820,10 +887,28 @@ function renderGrammar() {
           <ol class="practice" id="${pid}">${g.practice.map(p => `
             <li><span class="pq">${p.q || ""}</span> <span class="ans">${p.a || ""}</span>${p.note ? `<span class="ans-note">（${p.note}）</span>` : ""}</li>`).join("")}</ol></div>`;
       }
-      html += `</div>`;
+      html += `</div></div>`;      // /gram-body /gram-item
     });
   });
   root.innerHTML = html;
+  // 文法點展開／收合
+  root.querySelectorAll(".gram-h").forEach(h => h.onclick = () => {
+    const gk = h.dataset.gk;
+    if (gramOpen.has(gk)) gramOpen.delete(gk); else gramOpen.add(gk);
+    const keep = h.getBoundingClientRect().top;
+    renderGrammar();
+    const again = document.querySelector(`.gram-h[data-gk="${CSS.escape(gk)}"]`);
+    if (again) window.scrollBy(0, again.getBoundingClientRect().top - keep);
+  });
+  // 全部展開／收合
+  root.querySelectorAll(".toc-all").forEach(b => b.onclick = () => {
+    const l = activeLessons().find(x => lessonKey(x) === b.dataset.lk);
+    if (!l) return;
+    (l.grammar || []).forEach((_, gi) => {
+      if (b.dataset.all === "open") gramOpen.add(gramKey(l, gi)); else gramOpen.delete(gramKey(l, gi));
+    });
+    renderGrammar();
+  });
   // 整組顯示/隱藏
   root.querySelectorAll(".toggle-ans").forEach(b => b.onclick = () =>
     document.getElementById(b.dataset.t).classList.toggle("show-ans"));
@@ -836,15 +921,22 @@ function renderGrammar() {
     const t = cellSayText(td);
     if (t) speak(t);
   });
-  // 小目錄跳轉
-  root.querySelectorAll(".toc-chip").forEach(b => b.onclick = () => {
-    const el = document.getElementById(b.dataset.go);
+  // 小目錄跳轉（順便展開該文法點）
+  root.querySelectorAll(".toc-chip[data-go]").forEach(b => b.onclick = () => {
+    const id = b.dataset.go;
+    const el0 = document.getElementById(id);
+    if (el0 && el0.classList.contains("folded")) {
+      const h = el0.querySelector(".gram-h");
+      if (h) { gramOpen.add(h.dataset.gk); renderGrammar(); }
+    }
+    const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
 
 // ---- 測驗（單字中→日 + 練習題）----
 let quizPool = [], quizOrder = [], quizIdx = 0, quizCur = null, quizView = "quiz", quizKey = null;
+let quizWrong = [], quizAnswered = false;   // 本輪答錯的題號、本題是否已作答
 
 const EX_ASK = { translate: "把中文翻成日文", fill: "填入正確形態", choice: "選出正確答案" };
 const asArr = x => Array.isArray(x) ? x : (x ? [x] : []);
@@ -873,12 +965,21 @@ function answerOK(input, cur) {
   return [cur.a, ...(cur.alts || [])].some(x => normAns(x) === a);
 }
 
+function quizLen() { const v = parseInt(settings.quizLen); return isFinite(v) && v > 0 ? v : 0; }  // 0＝全部
+function newQuizRound(fromIdx) {          // fromIdx：只重做這些題（錯題重做用）
+  const all = fromIdx || quizPool.map((_, i) => i);
+  const n = quizLen();
+  quizOrder = shuffle(all);
+  if (!fromIdx && n && quizOrder.length > n) quizOrder = quizOrder.slice(0, n);
+  quizIdx = 0; quizWrong = [];
+}
+
 function renderQuiz() {
   const root = document.getElementById("quiz");
   quizPool = buildQuizPool();
   if (!quizPool.length) { root.innerHTML = '<p class="empty">這些課還沒有可出題的資料。</p>'; return; }
-  const key = selectedKey + "#" + quizPool.length;
-  if (key !== quizKey) { quizKey = key; quizOrder = shuffle(quizPool.map((_, i) => i)); quizIdx = 0; }
+  const key = selectedKey + "#" + quizPool.length + "#" + quizLen();
+  if (key !== quizKey) { quizKey = key; newQuizRound(); }
   if (quizView === "list") renderQuizList(); else drawQuiz();
 }
 
@@ -890,16 +991,32 @@ function quizBar(extra) {
 
 function drawQuiz() {
   const root = document.getElementById("quiz");
-  if (quizIdx >= quizOrder.length) {
-    root.innerHTML = quizBar(`<span class="vcount">共 ${quizPool.length} 題</span>`) +
-      `<p class="empty">✅ 本單元 ${quizPool.length} 題都出過一輪了！</p>
-       <div class="controls"><button class="btn-good" id="quiz-again">🔀 再來一輪</button></div>`;
-    document.getElementById("quiz-again").onclick = () => { quizOrder = shuffle(quizPool.map((_, i) => i)); quizIdx = 0; drawQuiz(); };
+  if (quizIdx >= quizOrder.length) {              // ---- 本輪結束：成績單 ----
+    const total = quizOrder.length, wrong = quizWrong.length, right = total - wrong;
+    const pct = total ? Math.round(right / total * 100) : 0;
+    root.innerHTML = quizBar(`<span class="vcount">題庫共 ${quizPool.length} 題</span>`) + `
+      <div class="quiz-result">
+        <div class="qr-score ${pct >= 80 ? "good" : pct >= 60 ? "mid" : "bad"}">${pct}<span>%</span></div>
+        <div class="qr-sub">本輪 ${total} 題，答對 <b>${right}</b> 題、答錯 <b>${wrong}</b> 題</div>
+      </div>
+      ${wrong ? `<div class="block"><span class="blabel">錯題</span>
+        <ol class="practice show-ans">${quizWrong.map(i => {
+          const c = quizPool[i];
+          return `<li><span class="pq">${c.q}</span> <span class="ans">${c.a}</span>${c.sub ? `<span class="ans-note">（${c.sub}）</span>` : ""}</li>`;
+        }).join("")}</ol></div>` : `<p class="empty">🎉 全部答對！</p>`}
+      <div class="controls">
+        ${wrong ? `<button class="btn-bad" id="quiz-wrong">↻ 只重做錯的 ${wrong} 題</button>` : ""}
+        <button class="btn-good" id="quiz-again">🔀 再來一輪</button>
+      </div>`;
+    document.getElementById("quiz-again").onclick = () => { newQuizRound(); drawQuiz(); };
+    const wb = document.getElementById("quiz-wrong");
+    if (wb) wb.onclick = () => { newQuizRound(quizWrong.slice()); drawQuiz(); };
     document.getElementById("quiz-list").onclick = () => { quizView = "list"; renderQuiz(); };
     return;
   }
+  quizAnswered = false;
   quizCur = quizPool[quizOrder[quizIdx]];
-  root.innerHTML = quizBar(`<span class="vcount">第 ${quizIdx + 1} / ${quizPool.length} 題</span>`) + `
+  root.innerHTML = quizBar(`<span class="vcount">第 ${quizIdx + 1} / ${quizOrder.length} 題${quizWrong.length ? `　·　✗${quizWrong.length}` : ""}</span>`) + `
     <div class="ex-item">
       ${quizCur.ask ? `<div class="quiz-ask">📝 考點：${quizCur.ask}</div>` : ""}
       <div class="quiz-q">${quizCur.q}<span class="tag">${quizCur.tag}</span></div>
@@ -912,8 +1029,12 @@ function drawQuiz() {
   input.focus();
   const reveal = () => {
     const ok = answerOK(input.value, quizCur);
+    if (!quizAnswered) {                       // 只計一次（避免重複按「看答案」）
+      quizAnswered = true;
+      if (!ok) quizWrong.push(quizOrder[quizIdx]);
+    }
     document.getElementById("qans").innerHTML =
-      `${ok ? '<span class="correct">✓ 正確！</span><br>' : ""}答案：<b>${quizCur.a}</b>` +
+      `${ok ? '<span class="correct">✓ 正確！</span><br>' : '<span class="wrong">✗ 再看一次</span><br>'}答案：<b>${quizCur.a}</b>` +
       (quizCur.sub ? `<br><span style="color:#777;font-size:14px">${quizCur.sub}</span>` : "");
     const btn = document.getElementById("show");
     btn.textContent = quizIdx + 1 >= quizOrder.length ? "看結果" : "下一題 →";

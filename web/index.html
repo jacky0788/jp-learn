@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="日文複習">
-<link rel="stylesheet" href="style.css?v=c3b23c7d">
+<link rel="stylesheet" href="style.css?v=d75ed22c">
 </head>
 <body>
 <header>
@@ -50,6 +50,11 @@
     <label class="set-row"><span>假名顯示方式</span><select id="set-kana"><option value="line">整句假名在下（預設）</option><option value="ruby">漢字上方注音（ふりがな）</option><option value="off">不顯示假名</option></select></label>
     <div class="set-note">此設定<b>統一控制全站假名</b>（例句、單字、文章、圖解表格）。目前所有日文句子的漢字都已標上注音（覆蓋率 100%）。測驗頁與單字卡正面一律不顯示，以免洩題。</div>
 
+    <div class="set-section">練習份量</div>
+    <label class="set-row"><span>測驗每輪題數</span><select id="set-quizlen"><option value="10">10 題</option><option value="20">20 題</option><option value="30">30 題</option><option value="50">50 題</option><option value="0">全部</option></select></label>
+    <label class="set-row"><span>單字卡每輪張數</span><select id="set-cardlen"><option value="10">10 張</option><option value="20">20 張</option><option value="30">30 張</option><option value="50">50 張</option><option value="0">全部</option></select></label>
+    <div class="set-note">分批練習比較容易完成。單字卡會<b>優先給還不熟的</b>；測驗做完會顯示答對率，並可<b>只重做錯的題目</b>。</div>
+
     <div class="set-section">其他</div>
     <label class="set-row"><span>內容更新紀錄</span><button class="btn-next" id="log-open">📋 開啟工作日誌</button></label>
 
@@ -74,7 +79,7 @@
   </div>
 </div>
 
-<script src="data.js?v=c3b23c7d"></script>
-<script src="app.js?v=c3b23c7d"></script>
+<script src="data.js?v=d75ed22c"></script>
+<script src="app.js?v=d75ed22c"></script>
 </body>
 </html>
