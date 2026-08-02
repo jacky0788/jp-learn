@@ -36,7 +36,8 @@ GROUP_RANK = {"文法": 0, "会話": 1, "基礎": 2}
 KANJI_R = r"一-鿿々〆ヶ"
 _OPT_PUNCT = "。、，,．.！!？?「」『』（）()・…—-~〜／/：:；;　 "
 RUBY_RE = re.compile(r"\{\{([^|{}]+)\|([^{}]+)\}\}")
-RUBY_STATS = {}          # build 過程累積：ok/manual/ambiguous/nomatch/none ＋ _list 待補清單
+RUBY_STATS = {}          # build 過程累積：ok/lex/manual/ambiguous/nomatch/none ＋ _list 待補清單
+RUBY_ITEMS = []          # 所有待標注音的 {jp,kana} 物件（載入完後由 assign_ruby 統一處理）
 
 
 def kata2hira(s):
@@ -102,8 +103,76 @@ def _solutions(segs, k, alnum_literal, cap=8):
     return res
 
 
-def ruby_markup(jp, kana):
-    """回傳 (markup, status)。status: ok / none(無漢字) / ambiguous / nomatch / manual"""
+_NUM_BASE = {0: "ぜろ", 1: "いち", 2: "に", 3: "さん", 4: "よん", 5: "ご",
+             6: "ろく", 7: "なな", 8: "はち", 9: "きゅう", 10: "じゅう",
+             100: "ひゃく", 1000: "せん", 10000: "まん"}
+_NUM_ALT = {1: ["いち", "いっ", "ひと", "ひとつ"], 2: ["に", "ふた", "ふたつ"],
+            3: ["さん", "みっ"], 4: ["よん", "し", "よ", "よっ"], 5: ["ご", "いつ"],
+            6: ["ろく", "ろっ", "むい"], 7: ["なな", "しち"], 8: ["はち", "はっ", "よう"],
+            9: ["きゅう", "く", "ここの"], 10: ["じゅう", "じゅっ", "じっ", "とお"],
+            20: ["にじゅう", "はた"], 0: ["ぜろ", "れい"]}
+
+
+def number_readings(s):
+    """數字字串的可能讀音集合（用來裁決含數字的歧義句，寧可寬鬆也不要漏）"""
+    s = s.replace(",", "").replace("，", "")
+    s = "".join(chr(ord(c) - 0xFEE0) if "０" <= c <= "９" else c for c in s)
+    if not s.isdigit():
+        return set()
+    n = int(s)
+    out = set(_NUM_ALT.get(n, []))
+    if n in _NUM_BASE:
+        out.add(_NUM_BASE[n])
+    if 10 < n < 100:                       # 11〜99
+        t, o = divmod(n, 10)
+        tens = ["じゅう", "じゅっ", "じっ"] if t == 1 else \
+               [a + "じゅう" for a in _NUM_ALT.get(t, [_NUM_BASE.get(t, "")]) if a]
+        if o == 0:
+            out |= set(tens)
+        else:
+            ones = _NUM_ALT.get(o, [_NUM_BASE.get(o, "")])
+            out |= {a + b for a in tens for b in ones if a and b}
+    if n >= 100:                           # 粗略：百/千/萬，允許各段變體
+        out.add("".join(_NUM_BASE.get(int(c), "") for c in s))
+    return {x for x in out if x}
+
+
+def _score_solution(segs, reads, alnum_literal, lex):
+    """用『讀音是否在別處被證實過』替候選切法評分；全部有佐證才算可信"""
+    score, i, all_ok = 0, 0, True
+    for kind, t in segs:
+        if kind == "read" or (kind == "alnum" and not alnum_literal):
+            r = reads[i]
+            i += 1
+            if kind == "alnum":
+                ok = r in number_readings(t) or r in lex.get(t, set())
+            else:
+                ok = r in lex.get(t, set())
+            score += 2 if ok else -3
+            all_ok = all_ok and ok
+    return score, all_ok
+
+
+def _emit(segs, reads, alnum_literal):
+    out, i = [], 0
+    for kind, t in segs:
+        if kind == "read" or (kind == "alnum" and not alnum_literal):
+            r = reads[i]
+            i += 1
+            if not r or len(r) > len(t) * 6:
+                return None
+            out.append("{{%s|%s}}" % (t, r))
+        else:
+            out.append(t)
+    return "".join(out)
+
+
+def ruby_markup(jp, kana, lex=None):
+    """回傳 (markup, status)。status: ok / lex(靠佐證裁決) / none / ambiguous / nomatch / manual
+
+    ⚠️ 安全鐵則：切法唯一 → 直接採用；有多種切法 → 只有在「唯一一種切法的每個讀音
+    都能在專案別處找到佐證」時才採用，否則寧可不標。
+    """
     if not jp or not kana:
         return None, "none"
     if RUBY_RE.search(jp):                       # YAML 已手動標記 → 直接沿用
@@ -114,37 +183,65 @@ def ruby_markup(jp, kana):
         return None, "none"
     k = _norm_kana(kana)
     for alnum_literal in (True, False):
-        sols = _solutions(segs, k, alnum_literal)
+        sols = _solutions(segs, k, alnum_literal, cap=60)
         if not sols:
             continue
-        if len(sols) > 1:
-            return None, "ambiguous"             # 有歧義 → 不標，寧可沒有也不要錯
-        reads, out, i = list(sols[0]), [], 0
-        for kind, t in segs:
-            if kind == "read" or (kind == "alnum" and not alnum_literal):
-                r = reads[i]
-                i += 1
-                if not r or len(r) > len(t) * 6:
-                    return None, "nomatch"
-                out.append("{{%s|%s}}" % (t, r))
-            else:
-                out.append(t)
-        return "".join(out), "ok"
+        if len(sols) == 1:
+            mk = _emit(segs, list(sols[0]), alnum_literal)
+            return (mk, "ok") if mk else (None, "nomatch")
+        if lex is None:
+            return None, "ambiguous"
+        scored = [(_score_solution(segs, list(s), alnum_literal, lex), s) for s in sols]
+        good = [(sc, s) for (sc, ok), s in scored if ok]
+        if len(good) == 1:
+            mk = _emit(segs, list(good[0][1]), alnum_literal)
+            return (mk, "lex") if mk else (None, "nomatch")
+        if good:                                  # 多個都通過 → 取分數唯一最高者
+            best = max(sc for sc, _ in good)
+            top = [s for sc, s in good if sc == best]
+            if len(top) == 1:
+                mk = _emit(segs, list(top[0]), alnum_literal)
+                return (mk, "lex") if mk else (None, "nomatch")
+        return None, "ambiguous"
     return None, "nomatch"
 
 
 def attach_ruby(d, stats, src):
-    """就地在 dict 上加 _ruby（只在能保證正確時）"""
-    if not isinstance(d, dict) or not d.get("jp") or not d.get("kana"):
-        return
-    mk, st = ruby_markup(d["jp"], d["kana"])
-    stats[st] = stats.get(st, 0) + 1
-    if st in ("ambiguous", "nomatch"):
-        stats.setdefault("_list", []).append((st, src, d["jp"], d["kana"]))
-    if mk:
-        d["_ruby"] = mk
-        # jp 永遠保持「無標記」的乾淨文字（測驗／Anki／TTS 都用它）
-        d["jp"] = RUBY_RE.sub(r"\1", d["jp"])
+    """先登記，等全部載入完再統一處理（見 assign_ruby）"""
+    if isinstance(d, dict) and d.get("jp") and d.get("kana"):
+        RUBY_ITEMS.append((d, src))
+
+
+def assign_ruby(stats):
+    """兩階段：①先做切法唯一的，累積「漢字→讀音」佐證字典
+              ②再用字典裁決有歧義的（只有唯一一種切法全部有佐證才採用）"""
+    lex = {}
+
+    def learn(markup):
+        for kj, rd in RUBY_RE.findall(markup or ""):
+            lex.setdefault(kj, set()).add(rd)
+
+    pending = []
+    for d, src in RUBY_ITEMS:                     # 第一階段
+        mk, st = ruby_markup(d["jp"], d["kana"])
+        if st in ("ok", "manual"):
+            d["_ruby"] = mk
+            d["jp"] = RUBY_RE.sub(r"\1", d["jp"])
+            learn(mk)
+            stats[st] = stats.get(st, 0) + 1
+        elif st == "none":
+            stats["none"] = stats.get("none", 0) + 1
+        else:
+            pending.append((d, src))
+    for d, src in pending:                        # 第二階段（用佐證裁決）
+        mk, st = ruby_markup(d["jp"], d["kana"], lex)
+        stats[st] = stats.get(st, 0) + 1
+        if mk:
+            d["_ruby"] = mk
+            d["jp"] = RUBY_RE.sub(r"\1", d["jp"])
+        else:
+            stats.setdefault("_list", []).append((st, src, d["jp"], d["kana"]))
+    stats["_lex"] = len(lex)
 
 
 def load_lessons():
@@ -451,6 +548,7 @@ def main():
     if not lessons:
         sys.exit("找不到任何課程資料（data/lessons/*.yaml）")
     articles = load_articles()
+    assign_ruby(RUBY_STATS)          # 全部載入後再統一標注音（第二階段要用全域佐證字典）
     web_out = build_web(lessons, articles)
     ver = stamp_version()
     nv, ng = build_anki(lessons)
@@ -487,13 +585,14 @@ def main():
 def report_ruby():
     """漢字注音統計＋待補清單（nomatch 多半代表 kana 寫錯，要優先修）"""
     s = RUBY_STATS
-    ok, man = s.get("ok", 0), s.get("manual", 0)
+    ok, man, lx = s.get("ok", 0), s.get("manual", 0), s.get("lex", 0)
     amb, nom, non = s.get("ambiguous", 0), s.get("nomatch", 0), s.get("none", 0)
-    tot = ok + man + amb + nom
+    tot = ok + man + lx + amb + nom
     if not tot:
         return
-    print("\n🔤 漢字注音：可標 %d／手動標記 %d／有歧義不標 %d／對不齊 %d（無漢字 %d）→ 覆蓋率 %.1f%%"
-          % (ok, man, amb, nom, non, (ok + man) / tot * 100))
+    print("\n🔤 漢字注音：切法唯一 %d／靠佐證裁決 %d／手動標記 %d／仍有歧義 %d／對不齊 %d"
+          "（無漢字 %d，字典 %d 個漢字段）→ 覆蓋率 %.1f%%"
+          % (ok, lx, man, amb, nom, non, s.get("_lex", 0), (ok + man + lx) / tot * 100))
     lst = s.get("_list", [])
     bad = [x for x in lst if x[0] == "nomatch"]
     if bad:

@@ -764,7 +764,10 @@ function escHtml(s) {
 }
 function cellHtml(s) {
   let t = escHtml(s);
-  t = t.replace(/\{\{([^|{}]+)\|([^{}]+)\}\}/g, "<ruby>$1<rt>$2</rt></ruby>"); // ruby
+  // 注音：統一由設定「假名顯示方式」控制；off＝整個 App 都不顯示假名
+  t = (kanaMode() === "off")
+    ? t.replace(/\{\{([^|{}]+)\|[^{}]+\}\}/g, "$1")
+    : t.replace(/\{\{([^|{}]+)\|([^{}]+)\}\}/g, "<ruby>$1<rt>$2</rt></ruby>");
   t = t.replace(/\[([^\]]+)\]/g, '<span class="hl">$1</span>');               // 標色
   return t;
 }
