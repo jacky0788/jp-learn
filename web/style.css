@@ -202,6 +202,44 @@ body.dark .toc-chip.toc-all { background: #4a5468; border-color: #4a5468; }
 body.dark .quiz-result { background: #232831; }
 body.dark .qr-sub { color: #b8c2d4; }
 .quiz-ans .wrong { color: #c0392b; }
+/* ---- 五十音圖：每個音一格，可點發音 ---- */
+.kchart-block { overflow-x: auto; }
+.kchart-note { font-size: 13px; color: #5a6679; margin: 2px 0 10px; line-height: 1.7; }
+body.dark .kchart-note { color: #b8c2d4; }
+.krow { display: flex; gap: 6px; margin-bottom: 6px; align-items: stretch; min-width: max-content; }
+.krow .klabel { flex: 0 0 46px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #8a97ad; }
+.krow.khead .kcol { flex: 0 0 96px; text-align: center; font-size: 12px; color: #8a97ad; padding-bottom: 2px; }
+.kcell { flex: 0 0 96px; background: #fff; border: 1px solid #dde3ea; border-radius: 10px;
+  padding: 8px 4px 6px; text-align: center; cursor: pointer; font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; gap: 1px; transition: background .12s, transform .08s; }
+.kcell:hover { background: #eef4ff; border-color: #b9c9e6; }
+.kcell:active { transform: scale(.97); }
+.kcell.empty { background: transparent; border: 1px dashed #e6eaf0; cursor: default; }
+.kcell.rare { opacity: .62; }
+.kcell .kh { font-size: 30px; line-height: 1.15; color: #2b3a55; font-weight: 600; }
+.kcell .kk { font-size: 15px; color: #6b7a94; line-height: 1.1; }
+.kcell .kr { font-size: 11px; color: #a2adbe; letter-spacing: .5px; text-transform: uppercase; }
+.kcell .kw { display: block; margin-top: 3px; padding-top: 3px; border-top: 1px dashed #e3e8ef;
+  width: 100%; font-size: 12px; color: #2b3a55; line-height: 1.35; }
+.kcell .kw:hover { color: #1652a0; text-decoration: underline; }
+.kcell .kw i { display: block; font-style: normal; font-size: 11px; color: #8a97ad; }
+body.dark .kcell { background: #232831; border-color: #3a4256; }
+body.dark .kcell:hover { background: #2c3444; border-color: #4a5468; }
+body.dark .kcell.empty { background: transparent; border-color: #2f3644; }
+body.dark .kcell .kh { color: #e6ecf5; }
+body.dark .kcell .kk { color: #aab6c9; }
+body.dark .kcell .kr { color: #7c8798; }
+body.dark .kcell .kw { color: #d7dde6; border-top-color: #3a4256; }
+body.dark .kcell .kw i { color: #99a2b0; }
+@media (max-width: 600px) {         /* 手機：格子縮小，仍保持一行一行對齊 */
+  .krow .klabel { flex-basis: 34px; font-size: 12px; }
+  .krow.khead .kcol, .kcell { flex-basis: 74px; }
+  .kcell .kh { font-size: 25px; }
+  .kcell .kk { font-size: 13px; }
+  .kcell .kw { font-size: 11px; }
+}
+
 /* 單字卡 SRS：即時回饋浮條 */
 .srs-toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(-16px);
   bottom: auto; top: 12px; z-index: 300; padding: 9px 16px; border-radius: 20px;

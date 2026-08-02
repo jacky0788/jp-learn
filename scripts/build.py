@@ -696,7 +696,7 @@ def annotate_lessons(lessons):
         if not isinstance(v, str) or not re.search(r"[%s]" % KANJI_R, v):
             return
         a, h, m = annotate_text(v)
-        if h:
+        if h or RUBY_RE.search(v):     # 自動標到，或 YAML 已手寫 {{漢字|假名}}
             o[dst] = a
         hit += h; miss += m
 
@@ -707,7 +707,7 @@ def annotate_lessons(lessons):
             do(g, "point", "_rpoint")
             if g.get("setsuzoku"):
                 rs = [annotate_text(s) for s in g["setsuzoku"]]
-                if any(x[1] for x in rs):
+                if any(x[1] for x in rs) or any(RUBY_RE.search(s) for s in g["setsuzoku"]):
                     g["_rsetsuzoku"] = [x[0] for x in rs]
                 hit += sum(x[1] for x in rs); miss += sum(x[2] for x in rs)
             for p in (g.get("practice") or []):

@@ -951,6 +951,30 @@ function cellSayText(td) {
   return stripSymbols(c.textContent);
 }
 
+// ---- 五十音圖（專屬排版：每個音一格，可點發音）----
+function kanaChartHtml(l) {
+  const secs = l.kana_chart || [];
+  if (!secs.length) return "";
+  return secs.map(sec => `
+    <div class="block kchart-block">
+      <span class="blabel">${escHtml(sec.title || "五十音")}</span>
+      ${sec.note ? `<div class="kchart-note">${mdInline(sec.note)}</div>` : ""}
+      ${sec.cols ? `<div class="krow khead"><span class="klabel"></span>${
+        sec.cols.map(c => `<span class="kcol">${escHtml(c)}</span>`).join("")}</div>` : ""}
+      ${(sec.rows || []).map(r => `
+        <div class="krow">
+          <span class="klabel">${escHtml(r.label || "")}</span>
+          ${(r.cells || []).map(c => c ? `
+            <button class="kcell${c.rare ? " rare" : ""}" data-say="${escAttr(c.h || "")}">
+              <span class="kh">${escHtml(c.h || "")}</span>
+              <span class="kk">${escHtml(c.k || "")}</span>
+              <span class="kr">${escHtml(c.r || "")}</span>
+              ${c.w ? `<span class="kw" data-w="${escAttr(c.w)}">${escHtml(c.w)}<i>${escHtml(c.wz || "")}</i></span>` : ""}
+            </button>` : `<span class="kcell empty"></span>`).join("")}
+        </div>`).join("")}
+    </div>`).join("");
+}
+
 // ---- 文法（講義版面：接続 / 説明 / 圖解 / 例 / 練習）----
 // 文法點過多時預設收合，點標題展開（狀態記在本次工作階段，切分頁不會跑掉）
 const gramOpen = new Set();
@@ -960,7 +984,7 @@ const COLLAPSE_FROM = 4;           // 文法點 ≥ 這個數量就預設收合
 
 function renderGrammar() {
   const root = document.getElementById("grammar");
-  const ls = activeLessons().filter(l => (l.grammar || []).length);
+  const ls = activeLessons().filter(l => (l.grammar || []).length || (l.kana_chart || []).length);
   if (!ls.length) { root.innerHTML = '<p class="empty">這些課還沒有文法資料。</p>'; return; }
   let html = "";
   ls.forEach(l => {
@@ -972,10 +996,12 @@ function renderGrammar() {
     }
     const openCnt = pts.filter((_, gi) => gramOpen.has(gramKey(l, gi))).length;
     html += `<h2 class="lesson-h">${lessonLabel(l)}　${l.title || ""}</h2>`;
+    html += kanaChartHtml(l);          // 五十音圖（只有 50音 主題有）
     const gidOf = gi => `g_${lessonKey(l)}_${gi}`;
     if (pts.length >= COLLAPSE_FROM) {     // 文法點多時：小目錄可跳轉 ＋ 全部展開/收合
       html += `<div class="gram-toc">${pts.map((g, gi) =>
-        `<button class="toc-chip" data-go="${gidOf(gi)}" data-gi="${gi}">${(g.point || "").replace(/^🔖\s*/, "")}</button>`).join("")}
+        `<button class="toc-chip" data-go="${gidOf(gi)}" data-gi="${gi}">${
+          escHtml((g.point || "").replace(/^🔖\s*/, "").replace(/\{\{([^|{}]+)\|[^{}]+\}\}/g, "$1"))}</button>`).join("")}
         <button class="toc-chip toc-all" data-all="${openCnt >= pts.length ? "close" : "open"}" data-lk="${k}">${openCnt >= pts.length ? "▲ 全部收合" : "▼ 全部展開"}</button></div>`;
     }
     pts.forEach((g, gi) => {
@@ -1033,6 +1059,9 @@ function renderGrammar() {
     const t = cellSayText(td);
     if (t) speak(t);
   });
+  // 五十音圖：點格子唸該音，點例字唸例字
+  root.querySelectorAll(".kcell[data-say]").forEach(b => b.onclick = () => speak(b.dataset.say));
+  root.querySelectorAll(".kcell .kw").forEach(w => w.onclick = e => { e.stopPropagation(); speak(w.dataset.w); });
   // 小目錄跳轉（順便展開該文法點）
   root.querySelectorAll(".toc-chip[data-go]").forEach(b => b.onclick = () => {
     const id = b.dataset.go;
