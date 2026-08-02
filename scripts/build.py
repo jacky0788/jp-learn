@@ -177,6 +177,10 @@ def ruby_markup(jp, kana, lex=None):
         return None, "none"
     if RUBY_RE.search(jp):                       # YAML 已手動標記 → 直接沿用
         return jp, "manual"
+    # kana 用「／」列舉多種讀音（例：何＝なに／なん）→ 不是單一句讀音，不標注音
+    if re.search(r"[／/]", kana) and not re.search(r"[／/]", jp) \
+            and not re.search(r"[A-Za-zＡ-Ｚ][：:]", jp):
+        return None, "none"
     jpc = _clean_jp(jp)
     segs = _segments(jpc)
     if not any(k == "read" for k, _ in segs):
