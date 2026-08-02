@@ -956,7 +956,7 @@ function kanaChartHtml(l) {
   const secs = l.kana_chart || [];
   if (!secs.length) return "";
   return secs.map(sec => `
-    <div class="block kchart-block">
+    <div class="block kchart-block${sec.kind ? " k-" + sec.kind : ""}">
       <span class="blabel">${escHtml(sec.title || "五十音")}</span>
       ${sec.note ? `<div class="kchart-note">${mdInline(sec.note)}</div>` : ""}
       ${sec.cols ? `<div class="krow khead"><span class="klabel"></span>${
@@ -965,9 +965,9 @@ function kanaChartHtml(l) {
         <div class="krow">
           <span class="klabel">${escHtml(r.label || "")}</span>
           ${(r.cells || []).map(c => c ? `
-            <button class="kcell${c.rare ? " rare" : ""}" data-say="${escAttr(c.h || "")}">
+            <button class="kcell${c.rare ? " rare" : ""}${c.k ? "" : " solo"}" data-say="${escAttr(c.h || "")}">
               <span class="kh">${escHtml(c.h || "")}</span>
-              <span class="kk">${escHtml(c.k || "")}</span>
+              ${c.k ? `<span class="kk">${escHtml(c.k)}</span>` : ""}
               <span class="kr">${escHtml(c.r || "")}</span>
               ${c.w ? `<span class="kw" data-w="${escAttr(c.w)}">${escHtml(c.w)}<i>${escHtml(c.wz || "")}</i></span>` : ""}
             </button>` : `<span class="kcell empty"></span>`).join("")}

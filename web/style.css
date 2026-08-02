@@ -218,6 +218,15 @@ body.dark .kchart-note { color: #b8c2d4; }
 .kcell.empty { background: transparent; border: 1px dashed #e6eaf0; cursor: default; }
 .kcell.rare { opacity: .62; }
 .kcell .kh { font-size: 30px; line-height: 1.15; color: #2b3a55; font-weight: 600; }
+/* 只有一個假名時放大（平假名／片假名分開的圖表） */
+.kcell.solo .kh { font-size: 38px; line-height: 1.1; }
+/* 平假名／片假名用不同底色，一眼分辨是哪一套 */
+.kchart-block.k-kata .kcell { background: #fffaf2; border-color: #ecdfc9; }
+.kchart-block.k-kata .kcell:hover { background: #fff2dd; border-color: #dcc59c; }
+.kchart-block.k-kata .kcell .kh { color: #7a5320; }
+body.dark .kchart-block.k-kata .kcell { background: #2b2820; border-color: #4a4234; }
+body.dark .kchart-block.k-kata .kcell:hover { background: #35311f; border-color: #5d5340; }
+body.dark .kchart-block.k-kata .kcell .kh { color: #f0d9ae; }
 .kcell .kk { font-size: 15px; color: #6b7a94; line-height: 1.1; }
 .kcell .kr { font-size: 11px; color: #a2adbe; letter-spacing: .5px; text-transform: uppercase; }
 .kcell .kw { display: block; margin-top: 3px; padding-top: 3px; border-top: 1px dashed #e3e8ef;
