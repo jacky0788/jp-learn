@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="日文複習">
-<link rel="stylesheet" href="style.css?v=2674ab28">
+<link rel="stylesheet" href="style.css?v=08f184de">
 </head>
 <body>
 <header>
@@ -47,6 +47,8 @@
     <label class="set-row"><span>深色模式</span><input type="checkbox" id="set-dark"></label>
     <label class="set-row"><span>極簡模式（只顯示文法課・會話課）</span><input type="checkbox" id="set-minimal"></label>
     <label class="set-row"><span>字體大小</span><span class="fontsize-ctrl"><input type="range" id="set-fontsize-range" min="70" max="200" step="5" value="100"><input type="number" id="set-fontsize-num" min="70" max="200" step="5" value="100"><span class="unit">%</span></span></label>
+    <label class="set-row"><span>假名顯示方式</span><select id="set-kana"><option value="line">整句假名在下（預設）</option><option value="ruby">漢字上方注音（ふりがな）</option><option value="off">不顯示假名</option></select></label>
+    <div class="set-note">「漢字上方注音」只在系統能<b>百分之百確定</b>讀音時才標；少數無法確定的句子（多為含數字）會自動保留原本的整句假名。測驗頁一律不顯示假名。</div>
 
     <div class="set-section">其他</div>
     <label class="set-row"><span>內容更新紀錄</span><button class="btn-next" id="log-open">📋 開啟工作日誌</button></label>
@@ -72,7 +74,7 @@
   </div>
 </div>
 
-<script src="data.js?v=2674ab28"></script>
-<script src="app.js?v=2674ab28"></script>
+<script src="data.js?v=08f184de"></script>
+<script src="app.js?v=08f184de"></script>
 </body>
 </html>

@@ -46,7 +46,7 @@ function badges(item) {
 // ---- 設定（深色模式 + 自動播放）----
 const SET_KEY = "jp_settings";
 const settings = Object.assign(
-  { theme: null, minimal: false, fontScale: 100, repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
+  { theme: null, minimal: false, fontScale: 100, kanaMode: "line", repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
   JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
 if (!settings.theme)
@@ -54,6 +54,22 @@ if (!settings.theme)
 function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
 function numSet(key, def) { const v = Number(settings[key]); return (isFinite(v) && v >= 0) ? v : def; }
 function applyTheme() { document.body.classList.toggle("dark", settings.theme === "dark"); }
+// ---- 漢字注音（ruby）：line=整句假名在下(預設) / ruby=漢字上方 / off=不顯示假名 ----
+function kanaMode() { return ["line", "ruby", "off"].indexOf(settings.kanaMode) >= 0 ? settings.kanaMode : "line"; }
+function applyKanaMode() {
+  const m = kanaMode();
+  document.body.classList.toggle("kana-ruby", m === "ruby");
+  document.body.classList.toggle("kana-off", m === "off");
+}
+function jpRuby(s) {   // 把 {{漢字|假名}} 轉成 <ruby>；其餘照 escape
+  return escHtml(s).replace(/\{\{([^|{}]+)\|([^{}]+)\}\}/g, "<ruby>$1<rt>$2</rt></ruby>");
+}
+function jpHtml(item) {  // 依設定決定 jp 要不要帶注音（測驗頁一律不用此函式）
+  if (!item) return "";
+  return (kanaMode() === "ruby" && item._ruby) ? jpRuby(item._ruby) : escHtml(item.jp || "");
+}
+// 有實際標到注音才加 has-ruby：標不到的句子（如含數字）保留整句假名當後備，不會變成無讀音
+function rubyCls(item) { return (kanaMode() === "ruby" && item && item._ruby) ? " has-ruby" : ""; }
 applyTheme();
 function applyMinimal() { document.body.classList.toggle("minimal", !!settings.minimal); }
 applyMinimal();
@@ -83,6 +99,7 @@ function syncSettingsUI() {
   const mi = document.getElementById("set-minimal"); if (mi) mi.checked = !!settings.minimal;
   const fr = document.getElementById("set-fontsize-range"); if (fr) fr.value = fontScaleVal();
   const fn = document.getElementById("set-fontsize-num"); if (fn) fn.value = fontScaleVal();
+  const km = document.getElementById("set-kana"); if (km) km.value = kanaMode();
   const r = document.getElementById("set-repeats"); if (r) r.value = numSet("repeats", 3);
   const rg = document.getElementById("set-repeat-gap"); if (rg) rg.value = numSet("repeatGap", 0.8);
   const g = document.getElementById("set-gap"); if (g) g.value = numSet("gap", 4);
@@ -99,6 +116,8 @@ function syncSettingsUI() {
   if (panel) panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
   const dark = document.getElementById("set-dark");
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
+  const kana = document.getElementById("set-kana");
+  if (kana) kana.onchange = () => { settings.kanaMode = kana.value; saveSettings(); applyKanaMode(); renderActive(); };
   const setFont = (v) => {
     settings.fontScale = Math.max(70, Math.min(200, parseInt(v) || 100));
     saveSettings(); applyFontScale();
@@ -589,7 +608,7 @@ function drawAuto() {
   const c = autoPlay.deck[autoPlay.idx];
   root.innerHTML = `
     <div class="flashcard auto">
-      <div class="jp">${c.jp || ""} ${playBtn(c)}</div>
+      <div class="jp">${jpHtml(c)} ${playBtn(c)}</div>
       <div class="kana">${c.kana || ""}</div>
       <div class="zh">${c.zh || ""}</div>
       ${c.pos ? `<div class="pos">${c.pos}</div>` : ""}
@@ -656,10 +675,10 @@ function renderVocabList() {
     </div>
     <div class="vocab-list">${items.map(v => `
       <div class="vrow">
-        <div class="vhead"><span class="vjp">${v.jp || ""}</span> ${playBtn(v)}
+        <div class="vhead${rubyCls(v)}"><span class="vjp">${jpHtml(v)}</span> ${playBtn(v)}
           <span class="vkana">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}${v._vgroup ? `<span class="vgrp">${v._vgroup}類</span>` : ""}</div>
         <div class="vzh">${v.zh || ""}${v.note ? `　<span class="vnote">${v.note}</span>` : ""}</div>
-        ${v.ex ? `<div class="vex"><span class="vex-jp">${v.ex.jp || ""} ${playBtn(v.ex)}</span>
+        ${v.ex ? `<div class="vex${rubyCls(v.ex)}"><span class="vex-jp">${jpHtml(v.ex)} ${playBtn(v.ex)}</span>
           <span class="vex-kana">${v.ex.kana || ""}</span><span class="vex-zh">${v.ex.zh || ""}</span></div>` : ""}
       </div>`).join("")}</div>`;
   document.getElementById("view-card").onclick = () => { cardsView = "card"; renderCards(); };
@@ -674,8 +693,8 @@ function drawCard() {
   root.innerHTML = `
     <div class="auto-bar"><button class="link" id="start-auto">🔀 自動播放（隨機）</button>
       <button class="link" id="view-list">📋 全部單字＋例句</button></div>
-    <div class="flashcard" id="fc">
-      <div class="jp">${c.jp || ""} ${playBtn(c)}</div>
+    <div class="flashcard${flipped ? rubyCls(c) : ""}" id="fc">
+      <div class="jp">${flipped ? jpHtml(c) : escHtml(c.jp || "")} ${playBtn(c)}</div>
       ${flipped ? `
         <div class="kana">${c.kana || ""}</div>
         <div class="zh">${c.zh || ""}</div>
@@ -784,7 +803,7 @@ function renderGrammar() {
       if (g.table) html += tableHtml(g.table);
       if (g.examples && g.examples.length)
         html += `<div class="block"><span class="blabel">例</span>${g.examples.map(ex => `
-          <div class="example"><div class="jp">${ex.jp || ""} ${playBtn(ex)}</div><div class="kana">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
+          <div class="example${rubyCls(ex)}"><div class="jp">${jpHtml(ex)} ${playBtn(ex)}</div><div class="kana">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
       if (g.practice && g.practice.length) {
         const pid = `pr_${lessonKey(l)}_${gi}`;
         html += `<div class="block"><span class="blabel">練習</span>${g.practice_note ? `<span class="pnote">${g.practice_note}</span>` : ""} <button class="link toggle-ans" data-t="${pid}">顯示/隱藏答案</button>
@@ -992,8 +1011,8 @@ function renderArticle() {
       <div class="read-hint">點任一句可從那句開始朗讀；朗讀時會高亮目前句子。</div>
     </div>
     <div class="read-body ${showCls}">
-      ${(a.body || []).map((s, i) => `<p class="rsent" id="rs${i}" data-i="${i}">
-        <span class="rs-jp">${s.jp || ""}</span>
+      ${(a.body || []).map((s, i) => `<p class="rsent${rubyCls(s)}" id="rs${i}" data-i="${i}">
+        <span class="rs-jp">${jpHtml(s)}</span>
         <span class="rs-kana">${s.kana || ""}</span>
         <span class="rs-zh">${s.zh || ""}</span></p>`).join("")}
     </div>`;
@@ -1193,6 +1212,7 @@ if (!LESSONS.length) {
 } else {
   initSearch();
   initSideToggle();
+  applyKanaMode();
   renderPicker();
   renderActive();
 }

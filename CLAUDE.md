@@ -93,6 +93,10 @@ web/index.html ──載入──▶ data.js + app.js + style.css ──▶ 純�
 - `build_web()`：把三者 `json.dumps(ensure_ascii=False)` 寫成 `web/data.js`。
 - `build_anki()`：產 `exports/anki_vocab.tsv`、`anki_grammar.tsv`（`item_tags()` 把 source/key 轉 Anki 標籤）。
 - `stamp_version()`：算 `data.js+app.js+style.css` 的 **sha1 前 8 碼**，戳進 `index.html` 的 `?v=` 與 `sw.js` 的 `CACHE="jp-learn-<hash>"`。**內容沒變→版本不變→不會多寫檔；內容變→快取必更新。不要手動改版本。**
+- **漢字注音（ruby／ふりがな）**：`ruby_markup(jp, kana)` 用 jp 的假名段當錨點去切 kana，反推每個漢字段的讀音，產生 `_ruby` 欄（`{{漢字|假名}}` 格式）。
+  **安全鐵則：只有「切法唯一」時才輸出**——有兩種以上切法（例：`一日に一万歩`、`24時間`）代表無法確定，一律不標，寧可沒有也不能標錯。
+  build 結尾 `report_ruby()` 印出覆蓋率與待補清單；**「對不齊」通常代表 kana 寫錯**（曾靠它抓到 3 筆錯字），要優先修。
+  歧義句（約 97 句，多含數字）可在 YAML 的 `jp` 直接手寫 `{{漢字|假名}}` 覆寫，build 會原樣沿用並把 `jp` 洗回無標記。
 - `lint_lessons()`：內容完整性檢查（缺 title/intro/goals、例句缺 jp/kana/zh、practice 缺 q/a、表格欄數不符、單元測驗<6 題…），build 結尾印「⚠️提醒」或「全部通過✅」。**不中斷 build，但提醒就要補。**
 - `main()` 開頭 `sys.stdout.reconfigure(utf-8)`，避免 Windows console 遇 emoji/日文崩潰。
 
@@ -104,6 +108,8 @@ web/index.html ──載入──▶ data.js + app.js + style.css ──▶ 純�
 - **狀態機（共用守衛）**：自動播放 `autoPlay`、廣播 `radio`、朗讀 `reader` 各有 `seq` 序號，切換/停止時 `seq++` 讓殘留的 `setTimeout`/`utterance.onend` 失效，避免非同步回呼亂跳。
 - **TTS**：`jaVoice()` 用 `voiceScore()` 挑最佳日語語音（Siri+110/Google+100/Kyoko 85/compact-80…），`settings.voiceName` 可指定；`stripSymbols()` 過濾不該唸的符號；手機需 `refreshVoices()` 多次補抓。
 - **圖解表格**：`cellHtml()` 解析 `[標色]` 與 `{{漢字|假名}}` ruby；表格每格可點發音(`cellSayText` 去 rt 留漢字)。
+- **漢字注音顯示**：`settings.kanaMode`＝`line`(整句假名在下，預設)／`ruby`(漢字上方)／`off`(不顯示)。`jpHtml(item)` 依模式決定要不要用 `_ruby`；`rubyCls(item)` 只在**真的標到注音**時加 `has-ruby`，CSS 才隱藏該項的假名行 → 標不到的句子自動保留整句假名當後備。
+  ⚠️ **測驗頁一律不注音**（會洩題）；**單字卡正面也不注音**，翻面後才顯示。TTS 一律讀 `kana`/`jp` 資料欄而非 DOM，所以不會把注音唸兩次。
 
 ### localStorage 鍵（清快取/除錯時參考）
 `jp_srs`(單字熟練度) · `jp_settings`(所有設定) · `jp_playlist`(廣播清單) · `jp_collapsed`/`jp_subcollapsed2`(選單收合) · `jp_sidecollapsed`(側欄收合)。

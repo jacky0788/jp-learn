@@ -29,6 +29,123 @@ EXPORTS_DIR = ROOT / "exports"
 
 GROUP_RANK = {"文法": 0, "会話": 1, "基礎": 2}
 
+# ==== 漢字注音（ruby / 振り仮名）自動對齊 ====
+# 原理：用 jp 裡的「假名段」當錨點去切 kana，反推每個漢字段的讀音。
+# ⚠️ 安全鐵則：**只有切法唯一時才輸出**。有兩種以上切法（例：一日に一万歩、24時間）
+#    代表無法確定，寧可不標也不能標錯；這些會列進 lint 清單，之後用 {{漢字|假名}} 手動補。
+KANJI_R = r"一-鿿々〆ヶ"
+_OPT_PUNCT = "。、，,．.！!？?「」『』（）()・…—-~〜／/：:；;　 "
+RUBY_RE = re.compile(r"\{\{([^|{}]+)\|([^{}]+)\}\}")
+RUBY_STATS = {}          # build 過程累積：ok/manual/ambiguous/nomatch/none ＋ _list 待補清單
+
+
+def kata2hira(s):
+    return "".join(chr(ord(c) - 0x60) if 0x30a1 <= ord(c) <= 0x30f6 else c for c in (s or ""))
+
+
+def _norm_kana(s):
+    s = kata2hira(s).replace("　", "").replace(" ", "")
+    return s.replace("／", "").replace("/", "")
+
+
+def _clean_jp(jp):
+    jp = re.sub(r"【[^】]*】", "", jp)                        # 去【I】【無意志動詞×】等標記
+    jp = re.sub(r"(^|[\s　])[A-Za-zＡ-Ｚ][：:]", r"\1", jp)    # 去 A： B： 說話者標籤
+    return jp
+
+
+def _segments(jp):
+    """切成 [(kind, text)]；kind: read=需注音, alnum=數字/字母, lit=字面錨點"""
+    out = []
+    for m in re.finditer(r"[%s]+|[0-9０-９]+|[A-Za-zＡ-Ｚａ-ｚ]+|[^%s0-9０-９A-Za-zＡ-Ｚａ-ｚ]+"
+                         % (KANJI_R, KANJI_R), jp):
+        t = m.group()
+        if re.match(r"^[%s]" % KANJI_R, t):
+            out.append(("read", t))
+        elif re.match(r"^[0-9０-９A-Za-zＡ-Ｚａ-ｚ]", t):
+            out.append(("alnum", t))
+        else:
+            out.append(("lit", t))
+    return out
+
+
+def _solutions(segs, k, alnum_literal, cap=8):
+    """列舉所有可能切法（最多 cap 個，足以判斷是否唯一）"""
+    res = []
+
+    def rec(si, ki, acc):
+        if len(res) >= cap:
+            return
+        if si == len(segs):
+            if ki == len(k):
+                res.append(tuple(acc))
+            return
+        kind, t = segs[si]
+        if kind == "read" or (kind == "alnum" and not alnum_literal):
+            for ln in range(1, min(len(t) * 6, len(k) - ki) + 1):
+                r = k[ki:ki + ln]
+                if not re.fullmatch(r"[ぁ-ゖー]+", r):
+                    break
+                rec(si + 1, ki + ln, acc + [r])
+        else:
+            kk = ki
+            for c in _norm_kana(t):
+                if kk < len(k) and k[kk] == c:
+                    kk += 1
+                elif c in _OPT_PUNCT:
+                    pass
+                else:
+                    return
+            rec(si + 1, kk, acc)
+
+    rec(0, 0, [])
+    return res
+
+
+def ruby_markup(jp, kana):
+    """回傳 (markup, status)。status: ok / none(無漢字) / ambiguous / nomatch / manual"""
+    if not jp or not kana:
+        return None, "none"
+    if RUBY_RE.search(jp):                       # YAML 已手動標記 → 直接沿用
+        return jp, "manual"
+    jpc = _clean_jp(jp)
+    segs = _segments(jpc)
+    if not any(k == "read" for k, _ in segs):
+        return None, "none"
+    k = _norm_kana(kana)
+    for alnum_literal in (True, False):
+        sols = _solutions(segs, k, alnum_literal)
+        if not sols:
+            continue
+        if len(sols) > 1:
+            return None, "ambiguous"             # 有歧義 → 不標，寧可沒有也不要錯
+        reads, out, i = list(sols[0]), [], 0
+        for kind, t in segs:
+            if kind == "read" or (kind == "alnum" and not alnum_literal):
+                r = reads[i]
+                i += 1
+                if not r or len(r) > len(t) * 6:
+                    return None, "nomatch"
+                out.append("{{%s|%s}}" % (t, r))
+            else:
+                out.append(t)
+        return "".join(out), "ok"
+    return None, "nomatch"
+
+
+def attach_ruby(d, stats, src):
+    """就地在 dict 上加 _ruby（只在能保證正確時）"""
+    if not isinstance(d, dict) or not d.get("jp") or not d.get("kana"):
+        return
+    mk, st = ruby_markup(d["jp"], d["kana"])
+    stats[st] = stats.get(st, 0) + 1
+    if st in ("ambiguous", "nomatch"):
+        stats.setdefault("_list", []).append((st, src, d["jp"], d["kana"]))
+    if mk:
+        d["_ruby"] = mk
+        # jp 永遠保持「無標記」的乾淨文字（測驗／Anki／TTS 都用它）
+        d["jp"] = RUBY_RE.sub(r"\1", d["jp"])
+
 
 def load_lessons():
     items = []
@@ -123,6 +240,16 @@ def _load_one(f, group):
             g = verb_group(v)
             if g:
                 v["_vgroup"] = g
+    # 漢字注音（只在切法唯一時才標）
+    for v in data["vocab"]:
+        if isinstance(v, dict):
+            attach_ruby(v, RUBY_STATS, f.name + ":單字")
+            if isinstance(v.get("ex"), dict):
+                attach_ruby(v["ex"], RUBY_STATS, f.name + ":單字例句")
+    for g in data["grammar"]:
+        if isinstance(g, dict):
+            for ex in (g.get("examples") or []):
+                attach_ruby(ex, RUBY_STATS, f.name + ":例句")
     data["_code"], data["_label"] = lesson_code(data, group)
     return data
 
@@ -166,6 +293,8 @@ def load_articles():
             continue
         d["_file"] = f.name
         d.setdefault("body", [])
+        for s in d["body"]:
+            attach_ruby(s, RUBY_STATS, "文章:" + f.name)
         items.append(d)
     return items
 
@@ -350,8 +479,29 @@ def main():
             print("   - " + x)
     else:
         print("\n內容檢查：全部通過 ✅")
+    report_ruby()
     print("\n複習網頁：用瀏覽器開啟 web/index.html")
     print("Anki：匯入 exports/*.tsv（匯入時欄位選 製表符 / Tab 分隔）")
+
+
+def report_ruby():
+    """漢字注音統計＋待補清單（nomatch 多半代表 kana 寫錯，要優先修）"""
+    s = RUBY_STATS
+    ok, man = s.get("ok", 0), s.get("manual", 0)
+    amb, nom, non = s.get("ambiguous", 0), s.get("nomatch", 0), s.get("none", 0)
+    tot = ok + man + amb + nom
+    if not tot:
+        return
+    print("\n🔤 漢字注音：可標 %d／手動標記 %d／有歧義不標 %d／對不齊 %d（無漢字 %d）→ 覆蓋率 %.1f%%"
+          % (ok, man, amb, nom, non, (ok + man) / tot * 100))
+    lst = s.get("_list", [])
+    bad = [x for x in lst if x[0] == "nomatch"]
+    if bad:
+        print("   ⚠️ 對不齊（請檢查 kana 是否寫錯）：")
+        for _, src, jp, kana in bad[:20]:
+            print("      [%s] %s ／ %s" % (src, jp, kana))
+    if amb:
+        print("   ℹ️ 有歧義 %d 句已自動略過注音（多為數字），可用 {{漢字|假名}} 手動補。" % amb)
 
 
 if __name__ == "__main__":

@@ -287,6 +287,24 @@ body.dark #lesson-picker { background: #1f232a; border-bottom-color: #333a44; }
 .gtable tbody tr:nth-child(even) td:hover { background: #eaf1fa; }
 .gtable-hint { font-size: 12px; color: #8a97ad; margin-top: 4px; }
 .gtable .hl { color: #d83a3a; font-weight: 700; }
+/* ---- 漢字注音（ruby / ふりがな）---- */
+ruby { ruby-align: center; }
+ruby rt { font-size: .5em; color: #8a97ad; font-weight: 400; letter-spacing: 0; }
+body.dark ruby rt { color: #99a2b0; }
+/* ruby 需要上方空間，避免和上一行擠在一起 */
+body.kana-ruby .example .jp, body.kana-ruby .flashcard .jp,
+body.kana-ruby .vhead, body.kana-ruby .vex-jp, body.kana-ruby .rs-jp { line-height: 2.1; }
+/* ruby 模式：只有「真的標到注音」的項目才隱藏假名行；
+   標不到的（如含數字的句子）保留整句假名當後備，不會變成完全沒讀音 */
+body.kana-ruby .example.has-ruby .kana,
+body.kana-ruby .flashcard.has-ruby .kana,
+body.kana-ruby .vhead.has-ruby .vkana,
+body.kana-ruby .vex.has-ruby .vex-kana,
+body.kana-ruby .rsent.has-ruby .rs-kana { display: none; }
+/* 不顯示 模式：一律隱藏假名 */
+body.kana-off .example .kana, body.kana-off .flashcard .kana,
+body.kana-off .vkana, body.kana-off .vex-kana,
+body.kana-off .rs-kana { display: none; }
 .gtable ruby rt { font-size: 10px; color: #8a97ad; }
 body.dark .gtable th { background: #2a303a; color: #cdd6e6; border-color: #3a3f47; }
 body.dark .gtable td { background: #232831; border-color: #3a3f47; }
