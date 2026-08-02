@@ -202,6 +202,26 @@ body.dark .toc-chip.toc-all { background: #4a5468; border-color: #4a5468; }
 body.dark .quiz-result { background: #232831; }
 body.dark .qr-sub { color: #b8c2d4; }
 .quiz-ans .wrong { color: #c0392b; }
+/* 單字卡 SRS：即時回饋浮條 */
+.srs-toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(-16px);
+  bottom: auto; top: 12px; z-index: 300; padding: 9px 16px; border-radius: 20px;
+  font-size: 14px; color: #fff; background: #2b3a55; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; white-space: nowrap; }
+.srs-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.srs-toast.good { background: #1e8449; }
+.srs-toast.bad { background: #c0392b; }
+/* 翻面後的熟練度資訊 */
+.srs-info { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #dde3ea;
+  font-size: 13px; color: #5a6679; }
+.srs-info .srs-hint { font-size: 12px; color: #8a97ad; }
+body.dark .srs-info { border-top-color: #3a4256; color: #b8c2d4; }
+/* 單字清單：熟練度星星與篩選 */
+.vsrs { font-size: 12px; color: #8a97ad; margin-bottom: 2px; }
+.vsrs .stars { color: #e6a817; letter-spacing: 1px; }
+.vsrs .vdue { margin-left: 8px; }
+.vsrs .vreset { margin-left: 6px; font-size: 12px; }
+.auto-bar .link.on { background: #2b3a55; color: #fff; border-radius: 12px; padding: 2px 10px; }
+body.dark .auto-bar .link.on { background: #4a5468; }
 /* 選單課程進度小圓點 */
 #lesson-picker label .prog { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   margin-left: 6px; vertical-align: middle; border: 1px solid currentColor; }

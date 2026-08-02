@@ -32,6 +32,28 @@ function inPlaylist(a) { return playlist.has(articleId(a)); }
 function togglePlaylist(a) { const id = articleId(a); if (playlist.has(id)) playlist.delete(id); else playlist.add(id); savePlaylist(); }
 
 function save() { localStorage.setItem("jp_srs", JSON.stringify(ST)); }
+
+// ---- 間隔複習 SRS：記得了→間隔逐次拉長；還不熟→打回今天 ----
+const SRS_STEPS = [1, 3, 7, 14, 30, 60];        // 連續記得第 n 次後，隔幾天再問
+function todayNum() { const d = new Date(); d.setHours(0, 0, 0, 0); return Math.round(d.getTime() / 86400000); }
+function srsOf(id) {                             // 相容舊資料（只有 score 的）
+  const r = ST[id];
+  if (!r) return { score: 0, streak: 0, due: 0, isNew: true };
+  return {
+    score: r.score || 0,
+    streak: r.streak != null ? r.streak : Math.max(0, r.score || 0),
+    due: r.due != null ? r.due : 0,
+    isNew: false
+  };
+}
+function srsInterval(streak) { return SRS_STEPS[Math.min(streak, SRS_STEPS.length - 1)]; }
+function isDue(id) { const s = srsOf(id); return s.isNew || s.due <= todayNum(); }
+function dueText(id) {
+  const s = srsOf(id);
+  if (s.isNew) return "還沒學過";
+  const d = s.due - todayNum();
+  return d <= 0 ? "今天要複習" : (d === 1 ? "明天再問" : `${d} 天後再問`);
+}
 function lessonKey(l) { return l._code || l.title || l._file; }
 function lessonLabel(l) { return l._label || l._code || l.title || "?"; }
 
@@ -566,6 +588,9 @@ function renderIntro() {
 
 // ---- 單字卡（含簡易間隔複習）----
 let deck = [], cardIdx = 0, flipped = false, cardsView = "card";
+let cardScope = "due";              // due＝只出今天到期的 / all＝全部單字
+let cardWrong = [], cardRight = 0;  // 本輪標「還不熟」的字、答對數
+let vocabFilter = "all";            // 全部單字清單的篩選：all / weak
 
 function vocabItems() {
   const items = [];
@@ -580,10 +605,10 @@ function shuffle(arr) {
   return a;
 }
 function cardLen() { const v = parseInt(settings.cardLen); return isFinite(v) && v > 0 ? v : 0; }  // 0＝全部
-function buildDeck() {
-  const items = vocabItems();
+function buildDeck(pool) {
+  const items = (pool || (cardScope === "due" ? vocabItems().filter(v => isDue(v._id)) : vocabItems())).slice();
   // 依熟練度排序：陌生(低分)優先，並做加權打散
-  items.forEach(it => { it._w = (ST[it._id]?.score || 0) + Math.random() * 0.5; });
+  items.forEach(it => { it._w = srsOf(it._id).score + Math.random() * 0.5; });
   items.sort((a, b) => a._w - b._w);
   const n = cardLen();
   return (n && items.length > n) ? items.slice(0, n) : items;   // 只取最該複習的前 N 張
@@ -689,27 +714,58 @@ function finishAuto() {
   document.getElementById("auto-back").onclick = renderCards;
 }
 
-function renderCards() {
+function renderCards(pool) {
   const root = document.getElementById("cards");
-  deck = buildDeck();
-  if (!deck.length) { root.innerHTML = '<p class="empty">這些課還沒有單字資料。</p>'; return; }
+  const all = vocabItems();
+  if (!all.length) { root.innerHTML = '<p class="empty">這些課還沒有單字資料。</p>'; return; }
   if (cardsView === "list") { renderVocabList(); return; }
+  if (!pool && cardScope === "due" && !all.some(v => isDue(v._id))) {   // 今天沒有到期的
+    const next = Math.min(...all.map(v => srsOf(v._id).due)) - todayNum();
+    root.innerHTML = `
+      <div class="quiz-result">
+        <div class="qr-score good">✓</div>
+        <div class="qr-sub">今天這一課沒有要複習的單字了！<br>最近的下次複習是 <b>${next <= 1 ? "明天" : next + " 天後"}</b>。</div>
+      </div>
+      <div class="controls">
+        <button class="btn-next" id="card-all">📚 照樣複習全部單字</button>
+        <button class="btn-next" id="card-list2">📋 全部單字＋例句</button>
+      </div>`;
+    document.getElementById("card-all").onclick = () => { cardScope = "all"; renderCards(); };
+    document.getElementById("card-list2").onclick = () => { cardsView = "list"; renderCards(); };
+    return;
+  }
+  deck = buildDeck(pool);
+  if (!deck.length) { root.innerHTML = '<p class="empty">沒有可複習的單字。</p>'; return; }
+  cardWrong = []; cardRight = 0;
   cardIdx = 0; flipped = false;
   drawCard();
+}
+
+function starBar(score) {           // 熟練度 ★★★☆☆
+  const n = Math.max(0, Math.min(5, score));
+  return "★".repeat(n) + "☆".repeat(5 - n);
 }
 
 // ---- 全部單字清單（含例句）----
 function renderVocabList() {
   const root = document.getElementById("cards");
-  const items = vocabItems();
+  const all = vocabItems();
+  const items = vocabFilter === "weak" ? all.filter(v => srsOf(v._id).score < 3) : all;
+  const weakCnt = all.filter(v => srsOf(v._id).score < 3).length;
+  const fb = (k, t) => `<button class="link${vocabFilter === k ? " on" : ""}" data-vf="${k}">${t}</button>`;
   root.innerHTML = `
     <div class="auto-bar">
       <button class="link" id="view-card">🃏 卡片模式</button>
       <button class="link" id="list-auto">🔀 自動播放</button>
+      ${fb("all", `全部 ${all.length}`)}${fb("weak", `只看不熟 ${weakCnt}`)}
       <span class="vcount">共 ${items.length} 個單字</span>
     </div>
+    ${items.length ? "" : '<p class="empty">這個篩選下沒有單字。</p>'}
     <div class="vocab-list">${items.map(v => `
       <div class="vrow">
+        <div class="vsrs"><span class="stars" title="熟練度 ${srsOf(v._id).score}/5">${starBar(srsOf(v._id).score)}</span>
+          <span class="vdue">${dueText(v._id)}</span>
+          ${srsOf(v._id).isNew ? "" : `<button class="link vreset" data-id="${escAttr(v._id)}" title="把這個字的熟練度歸零">↺</button>`}</div>
         <div class="vhead${rubyCls(v)}"><span class="vjp">${jpHtml(v)}</span> ${playBtn(v)}
           <span class="vkana">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}${v._vgroup ? `<span class="vgrp">${v._vgroup}類</span>` : ""}</div>
         <div class="vzh">${v.zh || ""}${v.note ? `　<span class="vnote">${v.note}</span>` : ""}</div>
@@ -719,15 +775,22 @@ function renderVocabList() {
   document.getElementById("view-card").onclick = () => { cardsView = "card"; renderCards(); };
   document.getElementById("list-auto").onclick = startAuto;
   root.querySelectorAll(".play").forEach(b => b.onclick = e => { e.stopPropagation(); speak(b.dataset.say); });
+  root.querySelectorAll("[data-vf]").forEach(b => b.onclick = () => { vocabFilter = b.dataset.vf; renderVocabList(); });
+  root.querySelectorAll(".vreset").forEach(b => b.onclick = () => {
+    delete ST[b.dataset.id]; save(); renderVocabList(); renderPicker();
+  });
 }
 
 function drawCard() {
   const root = document.getElementById("cards");
   const c = deck[cardIdx];
-  const known = ST[c._id]?.score || 0;
+  const s = srsOf(c._id);
+  const dueCnt = vocabItems().filter(v => isDue(v._id)).length;
   root.innerHTML = `
     <div class="auto-bar"><button class="link" id="start-auto">🔀 自動播放（隨機）</button>
-      <button class="link" id="view-list">📋 全部單字＋例句</button></div>
+      <button class="link" id="view-list">📋 全部單字＋例句</button>
+      <button class="link" id="scope-toggle">${cardScope === "due" ? `📅 今天到期（${dueCnt}）` : "📚 全部單字"}</button>
+      <span class="vcount">✓ ${cardRight}　↻ ${cardWrong.length}</span></div>
     <div class="flashcard${flipped ? rubyCls(c) : ""}" id="fc">
       <div class="jp">${flipped ? jpHtml(c) : escHtml(c.jp || "")} ${playBtn(c)}</div>
       ${flipped ? `
@@ -737,7 +800,9 @@ function drawCard() {
         ${c._vgroup ? `<div class="pos"><span class="vgrp">${c._vgroup}類動詞</span></div>` : ""}
         ${c.note ? `<div class="pos">${c.note}</div>` : ""}
         ${(c.source || c.key) ? `<div class="pos">${badges(c)}</div>` : ""}
-      ` : `<div class="hint">點一下看答案 · ${c._lesson} · 熟練度 ${known}</div>`}
+        <div class="srs-info">熟練度 ${starBar(s.score)} ${s.score}/5　·　${dueText(c._id)}
+          <br><span class="srs-hint">記得了 → ${srsInterval(s.streak)} 天後再問　·　還不熟 → 今天再出現</span></div>
+      ` : `<div class="hint">點一下看答案 · ${c._lesson} · 熟練度 ${s.score}</div>`}
     </div>
     <div class="controls">
       <button class="btn-next" id="prev"${cardIdx === 0 ? " disabled" : ""}>← 上一個</button>
@@ -752,6 +817,9 @@ function drawCard() {
 
   document.getElementById("fc").onclick = () => { flipped = !flipped; drawCard(); };
   document.getElementById("start-auto").onclick = startAuto;
+  document.getElementById("scope-toggle").onclick = () => {
+    cardScope = cardScope === "due" ? "all" : "due"; renderCards();
+  };
   document.getElementById("view-list").onclick = () => { cardsView = "list"; renderCards(); };
   document.getElementById("next").onclick = nextCard;
   document.getElementById("prev").onclick = prevCard;
@@ -775,22 +843,31 @@ function nextCard() {                       // 不評熟練度，單純跳下一
 function finishCardRound() {
   const root = document.getElementById("cards");
   const all = vocabItems();
-  const known = all.filter(v => (ST[v._id]?.score || 0) >= 3).length;
+  const known = all.filter(v => srsOf(v._id).score >= 3).length;
   const pct = all.length ? Math.round(known / all.length * 100) : 0;
-  const more = all.length > deck.length;
+  const wrongItems = deck.filter(v => cardWrong.indexOf(v._id) >= 0);
+  const stillDue = all.filter(v => isDue(v._id)).length;
   root.innerHTML = `
     <div class="quiz-result">
       <div class="qr-score ${pct >= 80 ? "good" : pct >= 60 ? "mid" : "bad"}">${pct}<span>%</span></div>
-      <div class="qr-sub">本輪 ${deck.length} 張看完了　·　整課熟練 <b>${known}</b> / ${all.length} 個單字</div>
+      <div class="qr-sub">本輪 ${deck.length} 張：記得 <b>${deck.length - wrongItems.length}</b>、不熟 <b>${wrongItems.length}</b>
+        <br>整課熟練 <b>${known}</b> / ${all.length} 個單字　·　今天還有 <b>${stillDue}</b> 個待複習</div>
     </div>
+    ${wrongItems.length ? `<div class="block"><span class="blabel">本輪不熟的字</span>
+      <div class="vocab-list">${wrongItems.map(v => `<div class="vrow">
+        <div class="vhead"><span class="vjp">${escHtml(v.jp || "")}</span> <span class="vkana">${v.kana || ""}</span></div>
+        <div class="vzh">${v.zh || ""}</div></div>`).join("")}</div></div>` : ""}
     <div class="controls">
-      ${more ? `<button class="btn-good" id="card-next-batch">▶ 繼續下一批</button>` : ""}
+      ${wrongItems.length ? `<button class="btn-bad" id="card-redo">↻ 只重看不熟的 ${wrongItems.length} 張</button>` : ""}
+      ${stillDue ? `<button class="btn-good" id="card-next-batch">▶ 繼續下一批</button>` : ""}
       <button class="btn-next" id="card-restart">🔀 再看一輪</button>
       <button class="btn-next" id="card-list">📋 全部單字＋例句</button>
     </div>`;
+  const rd = document.getElementById("card-redo");
+  if (rd) rd.onclick = () => renderCards(wrongItems);
   const nb = document.getElementById("card-next-batch");
   if (nb) nb.onclick = () => renderCards();
-  document.getElementById("card-restart").onclick = () => renderCards();
+  document.getElementById("card-restart").onclick = () => renderCards(deck.slice());
   document.getElementById("card-list").onclick = () => { cardsView = "list"; renderCards(); };
 }
 
@@ -801,11 +878,29 @@ function prevCard() {                       // 回上一張（不重洗牌、不
 }
 
 function grade(c, delta) {
-  const rec = ST[c._id] || { score: 0 };
-  rec.score = Math.max(-3, Math.min(5, rec.score + delta));
-  ST[c._id] = rec; save();
+  const s = srsOf(c._id), t = todayNum();
+  const score = Math.max(-3, Math.min(5, s.score + delta));
+  const up = delta > 0;
+  const days = up ? srsInterval(s.streak) : 0;
+  ST[c._id] = { score, streak: up ? s.streak + 1 : 0, due: up ? t + days : t };
+  save();
+  if (!up) { if (cardWrong.indexOf(c._id) < 0) cardWrong.push(c._id); }
+  else { const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1); }
+  cardRight = deck.slice(0, cardIdx + 1).filter(x => cardWrong.indexOf(x._id) < 0).length;
+  srsToast(up, s.score, score, days);
   cardIdx++; flipped = false;
   if (cardIdx >= deck.length) { finishCardRound(); } else { drawCard(); }
+}
+
+// 評分後的即時回饋（不擋畫面，1.6 秒後自動淡出）
+function srsToast(up, oldScore, newScore, days) {
+  let el = document.getElementById("srs-toast");
+  if (!el) { el = document.createElement("div"); el.id = "srs-toast"; document.body.appendChild(el); }
+  el.className = "srs-toast show " + (up ? "good" : "bad");
+  el.innerHTML = `${up ? "✓ 記得了" : "↻ 還不熟"}　熟練度 ${oldScore} → <b>${newScore}</b>`
+    + (days ? `　·　${days} 天後再問` : "　·　今天會再出現");
+  clearTimeout(srsToast._t);
+  srsToast._t = setTimeout(() => { el.className = "srs-toast"; }, 1600);
 }
 
 // ---- 圖解表格（cell 支援 [x] 標色變化處、{{漢字|假名}} ruby 注音）----
