@@ -69,7 +69,7 @@
 
 ## 🌐 平台/環境注意
 
-- Windows 11；主 shell 為 PowerShell（也有 Bash 工具，POSIX 語法）。
+- 主要在 Windows 11 開發（PowerShell，也有 Bash 工具，POSIX 語法）；也會在 Mac 上開發（只有 `python3` 指令，沒有 `python`；pyyaml 用 `.venv` 或啟動器裝）。
 - TTS 限制：**iPhone Safari 只能用基本 Kyoko**（Apple 不開放 Siri 語音給網頁，硬限制）；電腦/Android 自動用較佳語音。**使用者已決定維持輕量化、不做音檔/雲端/WASM 語音方案——別再提語音升級。**
 - 使用者也有一份持久記憶在 `~/.claude/projects/.../memory/jp-learn-project.md`（更詳細的歷史脈絡），可一併參考。
 

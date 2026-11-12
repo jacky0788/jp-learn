@@ -317,9 +317,17 @@ def verb_group(v):
     return classify_verb(v.get("kana") or v.get("jp"))
 
 
-def _load_one(f, group):
+def _safe_yaml(f):
+    """讀 YAML；格式錯誤時印出是哪個檔再停止（雲端部署的紀錄才看得出要修哪裡）"""
     with open(f, encoding="utf-8") as fp:
-        data = yaml.safe_load(fp)
+        try:
+            return yaml.safe_load(fp)
+        except yaml.YAMLError as e:
+            raise SystemExit("❌ YAML 格式錯誤：%s\n%s" % (f, e))
+
+
+def _load_one(f, group):
+    data = _safe_yaml(f)
     if not data:
         return None
     # track 欄位可覆寫資料夾推斷
@@ -331,10 +339,9 @@ def _load_one(f, group):
         group = "基礎"
     data["_file"] = f.name
     data["_group"] = group
-    data.setdefault("vocab", [])
-    data.setdefault("grammar", [])
-    data.setdefault("exercises", [])
-    data.setdefault("notes", [])
+    # 寫成 `vocab:` 卻沒內容時 YAML 會讀成 None，一律換成空清單，避免後面迴圈崩潰
+    for k in ("vocab", "grammar", "exercises", "notes"):
+        data[k] = data.get(k) or []
     # 自動為動詞單字標上類別 I/II/III（給網頁顯示徽章用）
     for v in data["vocab"]:
         if isinstance(v, dict):
@@ -388,12 +395,11 @@ def item_tags(code, item):
 def load_articles():
     items = []
     for f in sorted(ARTICLES_DIR.glob("*.yaml")):
-        with open(f, encoding="utf-8") as fp:
-            d = yaml.safe_load(fp)
+        d = _safe_yaml(f)
         if not d:
             continue
         d["_file"] = f.name
-        d.setdefault("body", [])
+        d["body"] = d.get("body") or []
         for s in d["body"]:
             attach_ruby(s, RUBY_STATS, "文章:" + f.name)
         items.append(d)
@@ -410,9 +416,10 @@ def load_changelog():
 
 def build_web(lessons, articles):
     WEB_DIR.mkdir(exist_ok=True)
-    payload = json.dumps(lessons, ensure_ascii=False, indent=2)
-    apayload = json.dumps(articles, ensure_ascii=False, indent=2)
-    cpayload = json.dumps(load_changelog(), ensure_ascii=False, indent=2)
+    dump = lambda o: json.dumps(o, ensure_ascii=False, separators=(",", ":"), default=str)
+    payload = dump(lessons)
+    apayload = dump(articles)
+    cpayload = dump(load_changelog())
     out = WEB_DIR / "data.js"
     out.write_text("window.LESSONS = " + payload + ";\nwindow.ARTICLES = " + apayload +
                    ";\nwindow.CHANGELOG = " + cpayload + ";\n", encoding="utf-8")

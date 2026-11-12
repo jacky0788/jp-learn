@@ -6,6 +6,7 @@
 __pycache__/
 *.pyc
 *.pyo
+.venv/
 
 # 作業系統
 .DS_Store

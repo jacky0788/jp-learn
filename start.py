@@ -51,6 +51,12 @@ def ensure_package(pip_name, import_name=None, required=True):
                 continue
         msg = "（必要）" if required else "（選用，可略過）"
         print(f"  ✗ {pip_name} 安裝失敗{msg}　手動安裝：pip install {pip_name}")
+        if required:
+            # macOS（Homebrew）與新版 Linux 的 Python 不允許直接 pip install（externally-managed-environment）
+            print("    若出現 externally-managed-environment，請改用專案自己的虛擬環境：")
+            print("      python3 -m venv .venv")
+            print(f"      .venv/bin/pip install {pip_name}        （Windows：.venv\\Scripts\\pip install {pip_name}）")
+            print("      .venv/bin/python start.py             （Windows：.venv\\Scripts\\python start.py）")
         return False
 
 

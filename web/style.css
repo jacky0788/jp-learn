@@ -591,3 +591,31 @@ body.dark .btn-bad { background: #3d2323; color: #f0a19a; }
 @media (max-width: 899px) {
   #lesson-search, .set-row select, .set-row input[type=number], #radio-mins { font-size: 16px; }
 }
+
+/* 沒有漢字的句子：假名行和日文一樣，不重複顯示 */
+.example.no-kanji .kana, .flashcard.no-kanji .kana, .vhead.no-kanji .vkana,
+.vex.no-kanji .vex-kana, .rsent.no-kanji .rs-kana, .radio-now.no-kanji .rn-kana { display: none; }
+/* 廣播也跟著「假名顯示方式」：不顯示假名／漢字上方注音時隱藏假名行 */
+body.kana-off .rn-kana, body.kana-ruby .radio-now.has-ruby .rn-kana { display: none; }
+body.kana-ruby .rn-jp { line-height: 2.1; }
+
+/* 對比：小字原本用 #8a97ad／#aaa／#888，白底上只有 2.3～3.3:1（標準是 4.5:1）→ 淺色模式改深一點 */
+body:not(.dark) :is(.set-section, .set-hint, .pick-subgroup, .pick-empty, .fontsize-ctrl .unit, .gram-h .caret,
+  .krow.khead .kcol, .kcell .kw i, .srs-info .srs-hint, .vsrs, .read-hint, .rsent .rs-kana, .rn-tag, .pl-sub,
+  .gtable caption, .gtable-hint, .pick-group .caret) { color: #5f6b80; }
+body:not(.dark) :is(.vcount, .vnote, .flashcard .pos, .progress, .empty, #set-close,
+  .practice li.revealed .ans-note, .practice.show-ans .ans-note) { color: #666; }
+body:not(.dark) .flashcard .hint { color: #6b7380; }
+body:not(.dark) .kcell .kr { color: #6b7a90; }
+body:not(.dark) .pnote { color: #b0651a; }
+.vpos, .gram-item .tag, .ex-item .tag, .read-head .lv { background: #66738a; }   /* 白字底色加深 */
+
+/* 深色模式漏掉的顏色：答案綠、✗紅在深色卡片上太暗 */
+body.dark .practice li.revealed .ans, body.dark .practice.show-ans .ans, body.dark .quiz-ans .correct,
+body.dark .read-done { color: #6fcf8f; }
+body.dark .quiz-ans .wrong { color: #f08a80; }
+body.dark .pnote { color: #f0b46a; }
+body.dark #radio-mins { background: #1f232a; border: 1px solid #3a3f47; color: #e8eaee; }
+
+/* 🔊 鈕：手指點的觸控目標放大 */
+@media (pointer: coarse) { .play { min-width: 36px; min-height: 30px; padding: 4px 9px; } }

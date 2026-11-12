@@ -133,8 +133,11 @@ function rubyCls(item) { return (kanaMode() === "ruby" && item && item._ruby) ? 
 function txt(item, key, rkey) {
   const raw = (item && item[key]) || "";
   if (kanaMode() !== "off" && item && item[rkey]) return jpRuby(item[rkey]);
-  return escHtml(raw);
+  return escHtml(raw).replace(/\{\{([^|{}]+)\|[^{}]+\}\}/g, "$1");   // 不顯示假名：手寫的 {{漢字|假名}} 只留漢字
 }
+// 這句的日文沒有漢字（全是假名）→ 底下那行假名跟日文一模一樣，不用重複顯示
+const KANJI_RE = /[㐀-鿿豈-﫿々〆ヶ]/;
+function noKanjiCls(item) { return (item && item.jp && !KANJI_RE.test(item.jp)) ? " no-kanji" : ""; }
 applyTheme();
 function applyMinimal() { document.body.classList.toggle("minimal", !!settings.minimal); }
 applyMinimal();
@@ -204,11 +207,11 @@ function syncSettingsUI() {
   const dark = document.getElementById("set-dark");
   if (dark) dark.onchange = () => { settings.theme = dark.checked ? "dark" : "light"; applyTheme(); saveSettings(); };
   const kana = document.getElementById("set-kana");
-  if (kana) kana.onchange = () => { settings.kanaMode = kana.value; saveSettings(); applyKanaMode(); renderActive(); };
+  if (kana) kana.onchange = () => { settings.kanaMode = kana.value; saveSettings(); applyKanaMode(); if (!autoPlay.on) renderActive(); };
   const qlen = document.getElementById("set-quizlen");
-  if (qlen) qlen.onchange = () => { settings.quizLen = parseInt(qlen.value) || 0; saveSettings(); quizKey = null; renderActive(); };
+  if (qlen) qlen.onchange = () => { settings.quizLen = parseInt(qlen.value) || 0; saveSettings(); quizKey = null; if (!autoPlay.on) renderActive(); };
   const clen = document.getElementById("set-cardlen");
-  if (clen) clen.onchange = () => { settings.cardLen = parseInt(clen.value) || 0; saveSettings(); renderActive(); };
+  if (clen) clen.onchange = () => { settings.cardLen = parseInt(clen.value) || 0; saveSettings(); if (!autoPlay.on) renderActive(); };
   const setFont = (v) => {
     settings.fontScale = Math.max(70, Math.min(200, parseInt(v) || 100));
     saveSettings(); applyFontScale();
@@ -439,23 +442,31 @@ function visibleGroups() { return settings.minimal ? GROUPS.filter(([g]) => MINI
 
 // ---- 搜尋：用關鍵字過濾課程／主題 ----
 let pickerQuery = "";
+// 搜尋用的正規化：全形半形、大小寫、片假名→平假名都視為相同（打「すぽーつ」也找得到「スポーツ」）
+function searchNorm(s) {
+  return String(s == null ? "" : s).normalize("NFKC").toLowerCase()
+    .replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
 function lessonHaystack(l) {
   if (l._hay) return l._hay;
-  const parts = [l._label, l._code, l.title, l.intro];
+  const parts = [l._label, l._code, l.title, l.intro, pickerLabel(l)];
   (l.goals || []).forEach(x => parts.push(x));
   (l.notes || []).forEach(x => parts.push(x));
   (l.grammar || []).forEach(g => {
-    parts.push(g.point, g.explain);
+    parts.push(g.point, g.explain, g.practice_note);
     (g.setsuzoku || []).forEach(s => parts.push(s));
     (g.examples || []).forEach(e => parts.push(e.jp, e.kana, e.zh));
+    (g.practice || []).forEach(p => parts.push(p.q, p.a, p.note));
+    if (g.table) [g.table.caption, ...(g.table.headers || []), ...[].concat(...(g.table.rows || []))].forEach(c => parts.push(c));
   });
-  (l.vocab || []).forEach(v => parts.push(v.jp, v.kana, v.zh, v.pos));
+  (l.exercises || []).forEach(e => parts.push(e.q, e.a, e.explain));
+  (l.vocab || []).forEach(v => parts.push(v.jp, v.kana, v.zh, v.pos, v.note, v.ex && v.ex.jp, v.ex && v.ex.kana, v.ex && v.ex.zh));
   if (l._article) (l._article.body || []).forEach(s => parts.push(s.jp, s.kana, s.zh));
-  l._hay = parts.filter(Boolean).join(" ").toLowerCase();
+  l._hay = searchNorm(stripRuby(parts.filter(x => typeof x === "string" && x).join(" ")));
   return l._hay;
 }
 function lessonMatches(l, q) {
-  return !q || lessonHaystack(l).includes(q);
+  return !q || lessonHaystack(l).includes(searchNorm(q));
 }
 
 let collapsedGroups = new Set(lsJSON("jp_collapsed", []));
@@ -713,6 +724,7 @@ function renderIntro() {
 let deck = [], cardIdx = 0, flipped = false, cardsView = "card";
 let cardScope = "due";              // due＝只出今天到期的 / all＝全部單字
 let cardWrong = [], cardRight = 0;  // 本輪標「還不熟」的字、答對數
+let cardGood = new Set();           // 本輪按過「記得了」的字（只按「下一個」略過的不算）
 let vocabFilter = "all";            // 全部單字清單的篩選：all / weak
 
 function vocabItems() {
@@ -797,7 +809,7 @@ function drawAuto() {
   const root = document.getElementById("cards");
   const c = autoPlay.deck[autoPlay.idx];
   root.innerHTML = `
-    <div class="flashcard auto">
+    <div class="flashcard auto${rubyCls(c)}${noKanjiCls(c)}">
       <div class="jp" lang="ja">${jpHtml(c)} ${playBtn(c)}</div>
       <div class="kana" lang="ja">${c.kana || ""}</div>
       <div class="zh">${c.zh || ""}</div>
@@ -866,7 +878,7 @@ function renderCards(pool) {
   }
   deck = buildDeck(pool);
   if (!deck.length) { root.innerHTML = '<p class="empty">沒有可複習的單字。</p>'; return; }
-  cardWrong = []; cardRight = 0;
+  cardWrong = []; cardRight = 0; cardGood = new Set();
   cardIdx = 0; flipped = false;
   drawCard();
 }
@@ -896,10 +908,10 @@ function renderVocabList() {
         <div class="vsrs"><span class="stars" title="熟練度 ${srsOf(v._id).score}/5">${starBar(srsOf(v._id).score)}</span>
           <span class="vdue">${dueText(v._id)}</span>
           ${srsOf(v._id).isNew ? "" : `<button class="link vreset" data-id="${escAttr(v._id)}" title="把這個字的熟練度歸零">↺</button>`}</div>
-        <div class="vhead${rubyCls(v)}"><span class="vjp" lang="ja">${jpHtml(v)}</span> ${playBtn(v)}
+        <div class="vhead${rubyCls(v)}${noKanjiCls(v)}"><span class="vjp" lang="ja">${jpHtml(v)}</span> ${playBtn(v)}
           <span class="vkana" lang="ja">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}${v._vgroup ? `<span class="vgrp">${v._vgroup}類</span>` : ""}</div>
         <div class="vzh">${v.zh || ""}${v.note ? `　<span class="vnote">${v.note}</span>` : ""}</div>
-        ${v.ex ? `<div class="vex${rubyCls(v.ex)}"><span class="vex-jp" lang="ja">${jpHtml(v.ex)} ${playBtn(v.ex)}</span>
+        ${v.ex ? `<div class="vex${rubyCls(v.ex)}${noKanjiCls(v.ex)}"><span class="vex-jp" lang="ja">${jpHtml(v.ex)} ${playBtn(v.ex)}</span>
           <span class="vex-kana" lang="ja">${v.ex.kana || ""}</span><span class="vex-zh">${v.ex.zh || ""}</span></div>` : ""}
       </div>`).join("")}</div>`;
   document.getElementById("view-card").onclick = () => { cardsView = "card"; renderCards(); };
@@ -921,7 +933,7 @@ function drawCard() {
       <button class="link" id="view-list">📋 全部單字＋例句</button>
       <button class="link" id="scope-toggle">${cardScope === "due" ? `📅 今天到期（${dueCnt}）` : "📚 全部單字"}</button>
       <span class="vcount">✓ ${cardRight}　↻ ${cardWrong.length}</span></div>
-    <div class="flashcard${flipped ? rubyCls(c) : ""}" id="fc">
+    <div class="flashcard${flipped ? rubyCls(c) + noKanjiCls(c) : ""}" id="fc">
       <div class="jp" lang="ja">${flipped ? jpHtml(c) : escHtml(c.jp || "")} ${playBtn(c)}</div>
       ${flipped ? `
         <div class="kana" lang="ja">${c.kana || ""}</div>
@@ -976,11 +988,13 @@ function finishCardRound() {
   const known = all.filter(v => srsOf(v._id).score >= 3).length;
   const pct = all.length ? Math.round(known / all.length * 100) : 0;
   const wrongItems = deck.filter(v => cardWrong.indexOf(v._id) >= 0);
+  const goodCnt = deck.filter(v => cardGood.has(v._id)).length;
+  const skipCnt = deck.length - goodCnt - wrongItems.length;
   const stillDue = all.filter(v => isDue(v._id)).length;
   root.innerHTML = `
     <div class="quiz-result">
       <div class="qr-score ${pct >= 80 ? "good" : pct >= 60 ? "mid" : "bad"}">${pct}<span>%</span></div>
-      <div class="qr-sub">本輪 ${deck.length} 張：記得 <b>${deck.length - wrongItems.length}</b>、不熟 <b>${wrongItems.length}</b>
+      <div class="qr-sub">本輪 ${deck.length} 張：記得 <b>${goodCnt}</b>、不熟 <b>${wrongItems.length}</b>${skipCnt ? `、略過 <b>${skipCnt}</b>` : ""}
         <br>整課熟練 <b>${known}</b> / ${all.length} 個單字　·　今天還有 <b>${stillDue}</b> 個待複習</div>
     </div>
     ${wrongItems.length ? `<div class="block"><span class="blabel">本輪不熟的字</span>
@@ -1015,17 +1029,18 @@ function grade(c, delta) {
     // 還沒到期的字（例如「照樣複習全部」或同一天再看一輪）：記得很好，但不提前拉長間隔，
     // 否則同一天連按幾次「記得了」就會被推到兩個月後
     const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1);
+    cardGood.add(c._id);
     srsToast(true, s.score, s.score, s.due - t, true);
   } else {
     const score = Math.max(-3, Math.min(5, s.score + delta));
     const days = up ? srsInterval(s.streak) : 0;
     ST[c._id] = { score, streak: up ? s.streak + 1 : 0, due: up ? t + days : t };
     save();
-    if (!up) { if (cardWrong.indexOf(c._id) < 0) cardWrong.push(c._id); }
-    else { const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1); }
+    if (!up) { if (cardWrong.indexOf(c._id) < 0) cardWrong.push(c._id); cardGood.delete(c._id); }
+    else { const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1); cardGood.add(c._id); }
     srsToast(up, s.score, score, days);
   }
-  cardRight = deck.slice(0, cardIdx + 1).filter(x => cardWrong.indexOf(x._id) < 0).length;
+  cardRight = cardGood.size;
   cardIdx++; flipped = false;
   if (cardIdx >= deck.length) { finishCardRound(); } else { drawCard(); }
 }
@@ -1142,14 +1157,14 @@ function renderGrammar() {
         <div class="gram-body">`;
       if (g.setsuzoku && g.setsuzoku.length)
         html += `<div class="block"><span class="blabel">接続</span><ul class="setsuzoku">${
-          (kanaMode() !== "off" && g._rsetsuzoku ? g._rsetsuzoku.map(jpRuby) : g.setsuzoku.map(escHtml))
-            .map(s => `<li>${s}</li>`).join("")}</ul></div>`;
+          (kanaMode() !== "off" && g._rsetsuzoku ? g._rsetsuzoku.map(jpRuby) : g.setsuzoku.map(s => escHtml(stripRuby(s))))
+            .map(s => `<li>${s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")}</li>`).join("")}</ul></div>`;
       if (g.explain)
         html += `<div class="block"><span class="blabel">説明</span><div class="explain">${mdParagraphs(g.explain)}</div></div>`;
       if (g.table) html += tableHtml(g.table);
       if (g.examples && g.examples.length)
         html += `<div class="block"><span class="blabel">例</span>${g.examples.map(ex => `
-          <div class="example${rubyCls(ex)}"><div class="jp" lang="ja">${jpHtml(ex)} ${playBtn(ex)}</div><div class="kana" lang="ja">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
+          <div class="example${rubyCls(ex)}${noKanjiCls(ex)}"><div class="jp" lang="ja">${jpHtml(ex)} ${playBtn(ex)}</div><div class="kana" lang="ja">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
       if (g.practice && g.practice.length) {
         const pid = `pr_${lessonKey(l)}_${gi}`;
         html += `<div class="block"><span class="blabel">練習</span>${g.practice_note ? `<span class="pnote">${g.practice_note}</span>` : ""} <button class="link toggle-ans" data-t="${pid}">顯示/隱藏答案</button>
@@ -1460,7 +1475,7 @@ function renderArticle() {
       <div class="read-hint">點任一句可從那句開始朗讀；朗讀時會高亮目前句子。</div>
     </div>
     <div class="read-body ${showCls}">
-      ${(a.body || []).map((s, i) => `<p class="rsent${rubyCls(s)}" id="rs${i}" data-i="${i}">
+      ${(a.body || []).map((s, i) => `<p class="rsent${rubyCls(s)}${noKanjiCls(s)}" id="rs${i}" data-i="${i}">
         <span class="rs-jp" lang="ja">${jpHtml(s)}</span>
         <span class="rs-kana" lang="ja">${s.kana || ""}</span>
         <span class="rs-zh">${s.zh || ""}</span></p>`).join("")}
@@ -1487,7 +1502,7 @@ const ARTICLE_SCOPES = ["mine", "article", "short", "long"];
 function articlePool(filterFn) {
   const pool = [];
   ARTICLES.filter(filterFn).forEach(a => (a.body || []).forEach(s => {
-    if (s.jp) pool.push({ jp: s.jp, kana: s.kana, zh: s.zh, tag: a.title || "文章" });
+    if (s.jp) pool.push({ jp: s.jp, kana: s.kana, zh: s.zh, _ruby: s._ruby, tag: a.title || "文章" });
   }));
   return pool;
 }
@@ -1501,8 +1516,8 @@ function buildRadioPool() {
   const lessons = (s === "all") ? LESSONS : LESSONS.filter(l => (l._group || "文法") === "会話");
   lessons.forEach(l => {
     const tag = lessonLabel(l);
-    (l.grammar || []).forEach(g => (g.examples || []).forEach(ex => { if (ex.jp) pool.push({ jp: ex.jp, kana: ex.kana, zh: ex.zh, tag }); }));
-    (l.vocab || []).forEach(v => { if (v.ex && v.ex.jp) pool.push({ jp: v.ex.jp, kana: v.ex.kana, zh: v.ex.zh, tag }); });
+    (l.grammar || []).forEach(g => (g.examples || []).forEach(ex => { if (ex.jp) pool.push({ jp: ex.jp, kana: ex.kana, zh: ex.zh, _ruby: ex._ruby, tag }); }));
+    (l.vocab || []).forEach(v => { if (v.ex && v.ex.jp) pool.push({ jp: v.ex.jp, kana: v.ex.kana, zh: v.ex.zh, _ruby: v.ex._ruby, tag }); });
   });
   return pool;
 }
@@ -1510,6 +1525,12 @@ const isArticleMode = () => ARTICLE_SCOPES.indexOf(settings.radioScope) >= 0;
 
 async function reqWake() { try { if (navigator.wakeLock) radio.wake = await navigator.wakeLock.request("screen"); } catch (e) { } }
 function relWake() { try { if (radio.wake) radio.wake.release(); } catch (e) { } radio.wake = null; }
+// 切到別的 App 時系統會自動解除防鎖屏；切回來時如果還在播，就重新申請，不然螢幕照樣會鎖、語音跟著停
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (radio.on) reqWake();
+  if (reader.on) reqWakeR();
+});
 
 function stopRadio() {
   radio.on = false;
@@ -1593,9 +1614,10 @@ function finishRadio() {
 function drawRadioNow(it) {
   const el = document.querySelector("#read .radio-now");
   if (!el) return;
+  el.className = "radio-now" + rubyCls(it) + noKanjiCls(it);   // 假名顯示方式也套用到廣播
   el.innerHTML = `
-    <div class="rn-tag">${it.tag || ""}</div>
-    <div class="rn-jp" lang="ja">${it.jp || ""}</div>
+    <div class="rn-tag">${escHtml(it.tag || "")}</div>
+    <div class="rn-jp" lang="ja">${jpHtml(it)}</div>
     <div class="rn-kana" lang="ja">${it.kana || ""}</div>
     <div class="rn-zh">${(settings.radioShowZh || settings.radioZh) ? (it.zh || "") : ""}</div>`;
 }
@@ -1675,10 +1697,19 @@ if (!LESSONS.length) {
 if ("serviceWorker" in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
   let refreshing = false;
+  // 正在聽廣播／朗讀／自動播放，或測驗做到一半時，不要突然重整：等停下來再更新（也可以按「立即更新」）
+  const busy = () => radio.on || reader.on || autoPlay.on ||
+    (currentTab === "quiz" && quizView === "quiz" && quizIdx > 0 && quizIdx < quizOrder.length);
+  const doReload = () => { if (refreshing) return; refreshing = true; location.reload(); };
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshing || !hadController) return;  // 首次安裝不重整，更新時才自動重整
-    refreshing = true;
-    location.reload();
+    if (!busy()) { doReload(); return; }
+    const d = document.createElement("div");
+    d.className = "tts-warn";
+    d.innerHTML = `🆕 網站有新版本，等你這段播放／測驗結束後會自動更新。<button id="upd-now">立即更新</button>`;
+    document.body.appendChild(d);
+    document.getElementById("upd-now").onclick = doReload;
+    const t = setInterval(() => { if (!busy()) { clearInterval(t); doReload(); } }, 5000);
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").then(reg => {
