@@ -92,7 +92,7 @@ web/index.html ──載入──▶ data.js + app.js + style.css ──▶ 純�
 ```
 **關鍵：網頁從不讀 YAML，只讀 build 產出的 `web/data.js`。改完 YAML 一定要重跑 build 才會生效。** `web/data.js` 是產物，已 gitignore（雲端部署時自動重建）。
 
-### build.py 做的事（`scripts/build.py`，約 360 行）
+### build.py 做的事（`scripts/build.py`，約 760 行）
 - `load_lessons()`：讀 lessons/kaiwa/kiso 三資料夾 → 每檔 `_load_one()` 補欄位：`_group`(文法/会話/基礎，可由 `track:` 覆寫)、`_file`、`_code`、`_label`、動詞 `_vgroup`(I/II/III，由 `verb_group()`/`classify_verb()` 判定)。排序鍵＝`(GROUP_RANK, book, lesson, order, file)`。
 - `load_articles()`→`window.ARTICLES`；`load_changelog()`→`window.CHANGELOG`。
 - `build_web()`：把三者 `json.dumps(ensure_ascii=False)` 寫成 `web/data.js`。
@@ -113,7 +113,7 @@ web/index.html ──載入──▶ data.js + app.js + style.css ──▶ 純�
 - `lint_lessons()`：內容完整性檢查（缺 title/intro/goals、例句缺 jp/kana/zh、practice 缺 q/a、表格欄數不符、單元測驗<6 題…），build 結尾印「⚠️提醒」或「全部通過✅」。**不中斷 build，但提醒就要補。**
 - `main()` 開頭 `sys.stdout.reconfigure(utf-8)`，避免 Windows console 遇 emoji/日文崩潰。
 
-### 前端 app.js 運作邏輯（`web/app.js`，約 1200 行，單檔無模組）
+### 前端 app.js 運作邏輯（`web/app.js`，約 1700 行，單檔無模組）
 啟動時：`LESSONS = window.LESSONS ＋ ARTICLE_LESSONS(文章包成偽課) ＋ RADIO_LESSON(廣播偽課)`，全部排序後共用同一套選課/分頁機制。
 - **選課**：一次只選一課 `selectedKey`（預設＝最新文法課）。`renderPicker()` 畫左側選單：群組切換列(`GROUPS` 文法/会話/基礎/文章) → `renderGroupBody()` 依群組細分（文法依`book`冊、**會話依`lesson`課**、文章分短/長＋廣播）。可收合子分類、可搜尋(`lessonHaystack` 快取)。
 - **分頁**：`updateTabs()` 依「該課有什麼內容」動態顯示分頁（有 vocab→單字卡、有 grammar→文法、文章→read…）。`renderActive()` 依 `currentTab` 呼叫對應 render。
@@ -125,7 +125,9 @@ web/index.html ──載入──▶ data.js + app.js + style.css ──▶ 純�
   ⚠️ **測驗頁一律不注音**（會洩題）；**單字卡正面也不注音**，翻面後才顯示。TTS 一律讀 `kana`/`jp` 資料欄而非 DOM，所以不會把注音唸兩次。
 
 ### localStorage 鍵（清快取/除錯時參考）
-`jp_srs`(單字熟練度) · `jp_settings`(所有設定) · `jp_playlist`(廣播清單) · `jp_collapsed`/`jp_subcollapsed2`(選單收合) · `jp_sidecollapsed`(側欄收合)。
+`jp_srs`(單字熟練度，key＝`課代碼:單字jp`，例 `B3L06:寄ります`；舊版的 `課代碼:v位置` 會在載入時自動遷移) · `jp_settings`(所有設定) · `jp_playlist`(廣播清單) · `jp_collapsed`/`jp_subcollapsed2`(選單收合) · `jp_sidecollapsed`(側欄收合)。
+所有讀寫都走 `lsGet`／`lsSet`／`lsJSON`（有 try/catch，瀏覽器封鎖儲存時只提示、不讓整頁掛掉）。設定面板「學習進度」可把 `jp_srs`／`jp_settings`／`jp_playlist` 匯出成 JSON、再匯入還原。
+⚠️ 單字的 `jp` 是熟練度的 key：改了某個單字的 `jp` 寫法，那個字的進度就會歸零（其他字不受影響）。
 
 ### PWA / 版本 / 更新流程
 - `sw.js`：**network-first**——有網路抓最新並更新快取，離線時回退快取（最後回退 `index.html`）。`CACHE` 名含內容雜湊，`activate` 時刪舊快取。

@@ -21,17 +21,39 @@ const LESSONS = (window.LESSONS || []).concat(ARTICLE_LESSONS, [RADIO_LESSON]).s
   groupRank(a) - groupRank(b) ||
   (a.book || 0) - (b.book || 0) || (a.lesson || 0) - (b.lesson || 0) ||
   (a.order || 0) - (b.order || 0));
-const ST = JSON.parse(localStorage.getItem("jp_srs") || "{}"); // 熟練度記錄
+// ---- 本機儲存（localStorage）：瀏覽器封鎖網站資料、空間滿或資料壞掉時不能讓整頁掛掉 ----
+let storageWarned = false;
+function storageWarn() {
+  if (storageWarned) return; storageWarned = true;
+  const show = () => {
+    const d = document.createElement("div");
+    d.className = "tts-warn";
+    d.innerHTML = `⚠️ 這個瀏覽器目前不允許網站儲存資料（可能是無痕模式或封鎖了網站資料），單字熟練度與設定<b>不會被保存</b>。
+      <button id="store-warn-close">知道了</button>`;
+    document.body.appendChild(d);
+    document.getElementById("store-warn-close").onclick = () => d.remove();
+  };
+  if (document.body) show(); else window.addEventListener("DOMContentLoaded", show);
+}
+function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { storageWarn(); return null; } }
+function lsSet(key, val) { try { localStorage.setItem(key, val); return true; } catch (e) { storageWarn(); return false; } }
+function lsJSON(key, def) {                       // 讀 JSON；沒有、壞掉或型別不對都回預設值
+  try {
+    const v = JSON.parse(lsGet(key));
+    return (v != null && typeof v === typeof def && Array.isArray(v) === Array.isArray(def)) ? v : def;
+  } catch (e) { return def; }
+}
+const ST = lsJSON("jp_srs", {}); // 熟練度記錄
 
 // 文章長短分類 & 廣播自選清單
 function isLongArticle(a) { return ((a && a.body) ? a.body.length : 0) >= 40; }
 function articleId(a) { return a && (a._file || a.title || ""); }
-let playlist = new Set(JSON.parse(localStorage.getItem("jp_playlist") || "[]"));
-function savePlaylist() { localStorage.setItem("jp_playlist", JSON.stringify([...playlist])); }
+let playlist = new Set(lsJSON("jp_playlist", []));
+function savePlaylist() { lsSet("jp_playlist", JSON.stringify([...playlist])); }
 function inPlaylist(a) { return playlist.has(articleId(a)); }
 function togglePlaylist(a) { const id = articleId(a); if (playlist.has(id)) playlist.delete(id); else playlist.add(id); savePlaylist(); }
 
-function save() { localStorage.setItem("jp_srs", JSON.stringify(ST)); }
+function save() { lsSet("jp_srs", JSON.stringify(ST)); }
 
 // ---- 間隔複習 SRS：記得了→間隔逐次拉長；還不熟→打回今天 ----
 const SRS_STEPS = [1, 3, 7, 14, 30, 60];        // 連續記得第 n 次後，隔幾天再問
@@ -56,6 +78,19 @@ function dueText(id) {
 }
 function lessonKey(l) { return l._code || l.title || l._file; }
 function lessonLabel(l) { return l._label || l._code || l.title || "?"; }
+// 單字熟練度的 key＝「課代碼:單字」。用單字本身而不是清單位置，增刪單字時其他字的進度才不會錯位。
+function vocabId(l, v) { return lessonKey(l) + ":" + (v.jp || v.kana || ""); }
+// 舊版用「課代碼:v＋位置」當 key：依目前資料把它們搬到新 key（只跑有對應的，搬完刪掉舊 key）
+(function migrateSrsKeys() {
+  let changed = false;
+  LESSONS.forEach(l => (l.vocab || []).forEach((v, i) => {
+    const oldK = lessonKey(l) + ":v" + i, newK = vocabId(l, v);
+    if (!ST[oldK] || oldK === newK) return;
+    if (!ST[newK]) ST[newK] = ST[oldK];
+    delete ST[oldK]; changed = true;
+  }));
+  if (changed) save();
+})();
 
 // 來源（文法／会話）與重點徽章
 function badges(item) {
@@ -71,10 +106,10 @@ const settings = Object.assign(
   { theme: null, minimal: false, fontScale: 100, kanaMode: "line", quizLen: 20, cardLen: 20,
     repeats: 3, repeatGap: 0.8, gap: 4, rate: 0.9, volume: 1, voiceName: "", readShow: "all",
     radioMins: 20, radioRepeat: 2, radioGap: 1.5, radioZh: false, radioShowZh: false, radioScope: "article" },
-  JSON.parse(localStorage.getItem(SET_KEY) || "{}"));
+  lsJSON(SET_KEY, {}));
 if (!settings.theme)
   settings.theme = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
-function saveSettings() { localStorage.setItem(SET_KEY, JSON.stringify(settings)); }
+function saveSettings() { lsSet(SET_KEY, JSON.stringify(settings)); }
 function numSet(key, def) { const v = Number(settings[key]); return (isFinite(v) && v >= 0) ? v : def; }
 function applyTheme() { document.body.classList.toggle("dark", settings.theme === "dark"); }
 // ---- 漢字注音（ruby）：line=整句假名在下(預設) / ruby=漢字上方 / off=不顯示假名 ----
@@ -108,20 +143,37 @@ function applyFontScale() { document.documentElement.style.setProperty("--fs", f
 applyFontScale();
 // 側邊欄收合（桌機）：狀態存 localStorage，按鈕在側欄右緣中間
 // 手機預設收合選單（螢幕小，選好課後選單就不常用了）；使用者手動切換過就記住他的選擇
-let sideCollapsed = (localStorage.getItem("jp_sidecollapsed") === null)
+let sideCollapsed = (lsGet("jp_sidecollapsed") === null)
   ? window.innerWidth < 900
-  : localStorage.getItem("jp_sidecollapsed") === "1";
+  : lsGet("jp_sidecollapsed") === "1";
+const isNarrow = () => window.innerWidth < 900;
 function applySideCollapsed() {
   document.body.classList.toggle("side-collapsed", sideCollapsed);
   const b = document.getElementById("side-toggle");
-  if (b) b.title = sideCollapsed ? "展開選單" : "收起選單";   // 箭頭/文字交給 CSS ::before
+  if (b) b.title = sideCollapsed ? "展開選單" : "收起選單";   // 箭頭交給 CSS ::before
+  updateSideLabel();
+}
+// 手機：選單收起時，開關上顯示目前的課名，讓人知道「點這裡換課」
+function updateSideLabel() {
+  const s = document.querySelector("#side-toggle .st-label");
+  if (!s) return;
+  const l = LESSONS.find(x => lessonKey(x) === selectedKey);
+  s.textContent = sideCollapsed ? ("切換課程" + (l ? "｜" + pickerLabel(l) : "")) : "收起選單";
+}
+// 手機選好課後自動收起選單，內容才不會被選單擠到下面（不改使用者記住的偏好）
+function collapsePickerOnMobile() {
+  if (!isNarrow() || sideCollapsed) return;
+  sideCollapsed = true;
+  applySideCollapsed();
+  window.scrollTo(0, 0);
 }
 function initSideToggle() {
   const b = document.getElementById("side-toggle");
   if (!b) return;
+  if (!b.querySelector(".st-label")) b.innerHTML = '<span class="st-label"></span>';
   b.onclick = () => {
     sideCollapsed = !sideCollapsed;
-    localStorage.setItem("jp_sidecollapsed", sideCollapsed ? "1" : "0");
+    lsSet("jp_sidecollapsed", sideCollapsed ? "1" : "0");
     applySideCollapsed();
   };
   applySideCollapsed();
@@ -215,6 +267,48 @@ function syncSettingsUI() {
   };
   if (close) close.onclick = () => panel.classList.add("hidden");
   panel.onclick = e => { if (e.target === panel) panel.classList.add("hidden"); };
+})();
+
+// ---- 💾 學習進度備份：熟練度、設定、廣播清單只存在這個瀏覽器，匯出成檔案才不怕清除或換手機 ----
+const BACKUP_KEYS = ["jp_srs", "jp_settings", "jp_playlist"];
+function exportProgress() {
+  const data = {};
+  BACKUP_KEYS.forEach(k => { const v = lsGet(k); if (v != null) data[k] = v; });
+  const blob = new Blob([JSON.stringify({ app: "jp-learn", version: 2, exported: new Date().toISOString(), data }, null, 1)],
+    { type: "application/json" });
+  const d = new Date(), pad = n => String(n).padStart(2, "0");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `jp-learn-進度-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.json`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function importProgress(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    let obj = null;
+    try { obj = JSON.parse(r.result); } catch (e) { }
+    if (!obj || obj.app !== "jp-learn" || !obj.data || typeof obj.data !== "object") { alert("這不是 jp-learn 的進度檔。"); return; }
+    let n = 0;
+    try { n = Object.keys(JSON.parse(obj.data.jp_srs || "{}")).length; } catch (e) { }
+    const when = String(obj.exported || "").slice(0, 10);
+    if (!confirm(`要用這個檔案（${when || "日期不明"} 匯出，${n} 筆單字紀錄）取代目前的進度嗎？\n目前這個瀏覽器裡的進度會被覆蓋。`)) return;
+    let ok = true;
+    BACKUP_KEYS.forEach(k => { if (typeof obj.data[k] === "string") ok = lsSet(k, obj.data[k]) && ok; });
+    if (ok) location.reload(); else alert("寫入失敗：這個瀏覽器不允許網站儲存資料。");
+  };
+  r.readAsText(file);
+}
+(function initBackup() {
+  const ex = document.getElementById("prog-export"), im = document.getElementById("prog-import");
+  const fileIn = document.getElementById("prog-file");
+  if (ex) ex.onclick = exportProgress;
+  if (im && fileIn) {
+    im.onclick = () => fileIn.click();
+    fileIn.onchange = () => { if (fileIn.files && fileIn.files[0]) importProgress(fileIn.files[0]); fileIn.value = ""; };
+  }
+  // 請瀏覽器把本站資料標成「持久」，降低被自動清除的機會（瀏覽器可自行決定是否同意）
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { }
 })();
 
 // 廣播在「📖 文章」群組裡（選 🎧 項目→主畫面顯示播放器）。播放中可切到別課，背景續播。
@@ -328,7 +422,7 @@ function escAttr(s) {
 }
 function playBtn(ex) {
   const t = sayText(ex);
-  return t ? `<button class="play" data-say="${escAttr(t)}" title="播放發音">🔊</button>` : "";
+  return t ? `<button class="play" data-say="${escAttr(t)}" title="播放發音" aria-label="播放發音">🔊</button>` : "";
 }
 
 // ---- 選課狀態（一次只選一課，預設選最新的文法課）----
@@ -364,12 +458,12 @@ function lessonMatches(l, q) {
   return !q || lessonHaystack(l).includes(q);
 }
 
-let collapsedGroups = new Set(JSON.parse(localStorage.getItem("jp_collapsed") || "[]"));
-function saveCollapsed() { localStorage.setItem("jp_collapsed", JSON.stringify([...collapsedGroups])); }
+let collapsedGroups = new Set(lsJSON("jp_collapsed", []));
+function saveCollapsed() { lsSet("jp_collapsed", JSON.stringify([...collapsedGroups])); }
 // 子分類收合：短文章／長文章 預設收起；文法課預設只展開「最新一課所在的冊」
 let collapsedSubs = (() => {
-  const stored = localStorage.getItem("jp_subcollapsed2");
-  if (stored) return new Set(JSON.parse(stored));
+  const stored = lsJSON("jp_subcollapsed2", null);
+  if (Array.isArray(stored)) return new Set(stored);
   const s = new Set(["文章:短文章", "文章:長文章", "会話:0"]);
   const bun = LESSONS.filter(l => (l._group || "文法") === "文法");
   if (bun.length) {
@@ -378,10 +472,16 @@ let collapsedSubs = (() => {
   }
   return s;
 })();
-function saveSubs() { localStorage.setItem("jp_subcollapsed2", JSON.stringify([...collapsedSubs])); }
+function saveSubs() { lsSet("jp_subcollapsed2", JSON.stringify([...collapsedSubs])); }
 
 function pickerLabel(l) {   // 文章選單只顯示日文標題（去掉中文括號），讓藥丸更短
   if (l._article) { const t = (l._label || "").replace(/（[^）]*）/g, "").trim(); return t || l._label; }
+  if ((l._group || "文法") === "文法" && l.title) {
+    // 文法課：B3L06 這種代碼看不出是哪一課 → 顯示「第26課 学校へ 行ってきます」（課號用全系列的編號）
+    const m = l.title.match(/（第(\d+)課）/) || l.title.match(/第(\d+)課/);
+    const tail = l.title.replace(/^第.冊\s*第\d+課(（第\d+課）)?[\s　]*/, "").trim();
+    if (m) return `第${m[1]}課${tail ? " " + tail : ""}`;
+  }
   return lessonLabel(l);
 }
 // 該課單字熟練度（熟練＝SRS 分數 ≥3）；沒有單字的課回傳 null
@@ -389,7 +489,7 @@ function lessonProgress(l) {
   const vs = l.vocab || [];
   if (!vs.length) return null;
   let known = 0;
-  vs.forEach((v, i) => { if ((ST[lessonKey(l) + ":v" + i]?.score || 0) >= 3) known++; });
+  vs.forEach(v => { if ((ST[vocabId(l, v)]?.score || 0) >= 3) known++; });
   return { known, total: vs.length, pct: Math.round(known / vs.length * 100) };
 }
 
@@ -398,6 +498,10 @@ function appendLabel(box, l) {
   const label = document.createElement("label");
   label.className = (key === selectedKey ? "on" : "") + (l._radio && radio.on ? " playing" : "");
   label.textContent = pickerLabel(l);
+  label.title = [lessonLabel(l), l.title].filter(Boolean).join("　");
+  label.tabIndex = 0;                     // 鍵盤可以 Tab 到、按 Enter 選課
+  label.setAttribute("role", "button");
+  label.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); label.click(); } };
   const pr = lessonProgress(l);          // 進度小圓點：空心=沒碰過、半滿、實心=已熟
   if (pr) {
     const dot = document.createElement("span");
@@ -406,11 +510,14 @@ function appendLabel(box, l) {
     label.appendChild(dot);
   }
   label.onclick = () => {
-    if (key === selectedKey) return;
+    if (key === selectedKey) { collapsePickerOnMobile(); return; }
     selectedKey = key;
     cancelAuto();                     // 換課時停止自動播放
+    if (reader.on) stopReader();      // 也停止文章朗讀（廣播設計上可以在背景續播，不停）
+    cardScope = "due";                // 「照樣複習全部」只對當下那一課有效
     renderPicker();
     renderActive();
+    collapsePickerOnMobile();
   };
   box.appendChild(label);
 }
@@ -475,6 +582,7 @@ function renderGroupBody(box, g, items, forceOpen) {
 function renderPicker() {
   const box = document.getElementById("lesson-checks");
   box.innerHTML = "";
+  updateSideLabel();
   const q = pickerQuery.trim().toLowerCase();
 
   if (q) {                                   // 搜尋：跨群組列出所有符合（附群組小標）
@@ -566,8 +674,8 @@ function updateTabs() {
 }
 
 function renderActive() {
+  updateTabs();                               // 先決定這一課有哪些分頁（可能會換掉 currentTab）
   if (currentTab !== "read") stopReader();    // 離開閱讀分頁就停止朗讀
-  updateTabs();
   if (currentTab === "intro") renderIntro();
   else if (currentTab === "cards") renderCards();
   else if (currentTab === "grammar") renderGrammar();
@@ -609,8 +717,8 @@ let vocabFilter = "all";            // 全部單字清單的篩選：all / weak
 
 function vocabItems() {
   const items = [];
-  activeLessons().forEach(l => (l.vocab || []).forEach((v, i) => {
-    items.push({ ...v, _id: lessonKey(l) + ":v" + i, _lesson: lessonLabel(l) });
+  activeLessons().forEach(l => (l.vocab || []).forEach(v => {
+    items.push({ ...v, _id: vocabId(l, v), _lesson: lessonLabel(l) });
   }));
   return items;
 }
@@ -636,9 +744,16 @@ function clearAutoTimers() {
   if (window.speechSynthesis) speechSynthesis.cancel();
 }
 function cancelAuto() { autoPlay.on = false; autoPlay.paused = false; autoPlay.seq++; clearAutoTimers(); }
+// 單字自動播放／文章朗讀／廣播共用同一個語音佇列：啟動其中一個前先停掉其他兩個，避免句子交錯亂唸
+function stopOtherSpeech(except) {
+  if (except !== "auto" && autoPlay.on) cancelAuto();
+  if (except !== "reader" && reader.on) stopReader();
+  if (except !== "radio" && radio.on) stopRadio();
+}
 function startAuto() {
   const items = vocabItems();
   if (!items.length) return;
+  stopOtherSpeech("auto");
   cancelAuto();
   autoPlay.deck = shuffle(items); autoPlay.idx = 0; autoPlay.on = true; autoPlay.paused = false;
   drawAuto();
@@ -683,8 +798,8 @@ function drawAuto() {
   const c = autoPlay.deck[autoPlay.idx];
   root.innerHTML = `
     <div class="flashcard auto">
-      <div class="jp">${jpHtml(c)} ${playBtn(c)}</div>
-      <div class="kana">${c.kana || ""}</div>
+      <div class="jp" lang="ja">${jpHtml(c)} ${playBtn(c)}</div>
+      <div class="kana" lang="ja">${c.kana || ""}</div>
       <div class="zh">${c.zh || ""}</div>
       ${c.pos ? `<div class="pos">${c.pos}</div>` : ""}
     </div>
@@ -781,11 +896,11 @@ function renderVocabList() {
         <div class="vsrs"><span class="stars" title="熟練度 ${srsOf(v._id).score}/5">${starBar(srsOf(v._id).score)}</span>
           <span class="vdue">${dueText(v._id)}</span>
           ${srsOf(v._id).isNew ? "" : `<button class="link vreset" data-id="${escAttr(v._id)}" title="把這個字的熟練度歸零">↺</button>`}</div>
-        <div class="vhead${rubyCls(v)}"><span class="vjp">${jpHtml(v)}</span> ${playBtn(v)}
-          <span class="vkana">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}${v._vgroup ? `<span class="vgrp">${v._vgroup}類</span>` : ""}</div>
+        <div class="vhead${rubyCls(v)}"><span class="vjp" lang="ja">${jpHtml(v)}</span> ${playBtn(v)}
+          <span class="vkana" lang="ja">${v.kana || ""}</span>${v.pos ? `<span class="vpos">${v.pos}</span>` : ""}${v._vgroup ? `<span class="vgrp">${v._vgroup}類</span>` : ""}</div>
         <div class="vzh">${v.zh || ""}${v.note ? `　<span class="vnote">${v.note}</span>` : ""}</div>
-        ${v.ex ? `<div class="vex${rubyCls(v.ex)}"><span class="vex-jp">${jpHtml(v.ex)} ${playBtn(v.ex)}</span>
-          <span class="vex-kana">${v.ex.kana || ""}</span><span class="vex-zh">${v.ex.zh || ""}</span></div>` : ""}
+        ${v.ex ? `<div class="vex${rubyCls(v.ex)}"><span class="vex-jp" lang="ja">${jpHtml(v.ex)} ${playBtn(v.ex)}</span>
+          <span class="vex-kana" lang="ja">${v.ex.kana || ""}</span><span class="vex-zh">${v.ex.zh || ""}</span></div>` : ""}
       </div>`).join("")}</div>`;
   document.getElementById("view-card").onclick = () => { cardsView = "card"; renderCards(); };
   document.getElementById("list-auto").onclick = startAuto;
@@ -807,9 +922,9 @@ function drawCard() {
       <button class="link" id="scope-toggle">${cardScope === "due" ? `📅 今天到期（${dueCnt}）` : "📚 全部單字"}</button>
       <span class="vcount">✓ ${cardRight}　↻ ${cardWrong.length}</span></div>
     <div class="flashcard${flipped ? rubyCls(c) : ""}" id="fc">
-      <div class="jp">${flipped ? jpHtml(c) : escHtml(c.jp || "")} ${playBtn(c)}</div>
+      <div class="jp" lang="ja">${flipped ? jpHtml(c) : escHtml(c.jp || "")} ${playBtn(c)}</div>
       ${flipped ? `
-        <div class="kana">${c.kana || ""}</div>
+        <div class="kana" lang="ja">${c.kana || ""}</div>
         <div class="zh">${c.zh || ""}</div>
         ${c.pos ? `<div class="pos">${c.pos}</div>` : ""}
         ${c._vgroup ? `<div class="pos"><span class="vgrp">${c._vgroup}類動詞</span></div>` : ""}
@@ -870,7 +985,7 @@ function finishCardRound() {
     </div>
     ${wrongItems.length ? `<div class="block"><span class="blabel">本輪不熟的字</span>
       <div class="vocab-list">${wrongItems.map(v => `<div class="vrow">
-        <div class="vhead"><span class="vjp">${escHtml(v.jp || "")}</span> <span class="vkana">${v.kana || ""}</span></div>
+        <div class="vhead"><span class="vjp" lang="ja">${escHtml(v.jp || "")}</span> <span class="vkana" lang="ja">${v.kana || ""}</span></div>
         <div class="vzh">${v.zh || ""}</div></div>`).join("")}</div></div>` : ""}
     <div class="controls">
       ${wrongItems.length ? `<button class="btn-bad" id="card-redo">↻ 只重看不熟的 ${wrongItems.length} 張</button>` : ""}
@@ -894,26 +1009,36 @@ function prevCard() {                       // 回上一張（不重洗牌、不
 
 function grade(c, delta) {
   const s = srsOf(c._id), t = todayNum();
-  const score = Math.max(-3, Math.min(5, s.score + delta));
   const up = delta > 0;
-  const days = up ? srsInterval(s.streak) : 0;
-  ST[c._id] = { score, streak: up ? s.streak + 1 : 0, due: up ? t + days : t };
-  save();
-  if (!up) { if (cardWrong.indexOf(c._id) < 0) cardWrong.push(c._id); }
-  else { const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1); }
+  const due = s.isNew || s.due <= t;
+  if (up && !due) {
+    // 還沒到期的字（例如「照樣複習全部」或同一天再看一輪）：記得很好，但不提前拉長間隔，
+    // 否則同一天連按幾次「記得了」就會被推到兩個月後
+    const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1);
+    srsToast(true, s.score, s.score, s.due - t, true);
+  } else {
+    const score = Math.max(-3, Math.min(5, s.score + delta));
+    const days = up ? srsInterval(s.streak) : 0;
+    ST[c._id] = { score, streak: up ? s.streak + 1 : 0, due: up ? t + days : t };
+    save();
+    if (!up) { if (cardWrong.indexOf(c._id) < 0) cardWrong.push(c._id); }
+    else { const i = cardWrong.indexOf(c._id); if (i >= 0) cardWrong.splice(i, 1); }
+    srsToast(up, s.score, score, days);
+  }
   cardRight = deck.slice(0, cardIdx + 1).filter(x => cardWrong.indexOf(x._id) < 0).length;
-  srsToast(up, s.score, score, days);
   cardIdx++; flipped = false;
   if (cardIdx >= deck.length) { finishCardRound(); } else { drawCard(); }
 }
 
 // 評分後的即時回饋（不擋畫面，1.6 秒後自動淡出）
-function srsToast(up, oldScore, newScore, days) {
+function srsToast(up, oldScore, newScore, days, kept) {
   let el = document.getElementById("srs-toast");
   if (!el) { el = document.createElement("div"); el.id = "srs-toast"; document.body.appendChild(el); }
   el.className = "srs-toast show " + (up ? "good" : "bad");
-  el.innerHTML = `${up ? "✓ 記得了" : "↻ 還不熟"}　熟練度 ${oldScore} → <b>${newScore}</b>`
-    + (days ? `　·　${days} 天後再問` : "　·　今天會再出現");
+  el.innerHTML = kept
+    ? `✓ 記得了　·　還沒到期，維持 ${days <= 1 ? "明天" : days + " 天後"}再問`
+    : `${up ? "✓ 記得了" : "↻ 還不熟"}　熟練度 ${oldScore} → <b>${newScore}</b>`
+      + (days ? `　·　${days} 天後再問` : "　·　今天會再出現");
   clearTimeout(srsToast._t);
   srsToast._t = setTimeout(() => { el.className = "srs-toast"; }, 1600);
 }
@@ -981,6 +1106,7 @@ const gramOpen = new Set();
 let gramInit = new Set();          // 已套過預設值的課，避免每次 render 都重設
 function gramKey(l, gi) { return lessonKey(l) + "#" + gi; }
 const COLLAPSE_FROM = 4;           // 文法點 ≥ 這個數量就預設收合
+let tocOpen = null;                // 文法目錄展開狀態（null＝依螢幕寬度決定；使用者點過就記住到這次工作階段結束）
 
 function renderGrammar() {
   const root = document.getElementById("grammar");
@@ -999,9 +1125,14 @@ function renderGrammar() {
     html += kanaChartHtml(l);          // 五十音圖（只有 50音 主題有）
     const gidOf = gi => `g_${lessonKey(l)}_${gi}`;
     if (pts.length >= COLLAPSE_FROM) {     // 文法點多時：小目錄可跳轉 ＋ 全部展開/收合
-      html += `<div class="gram-toc">${pts.map((g, gi) =>
-        `<button class="toc-chip" data-go="${gidOf(gi)}" data-gi="${gi}">${
-          escHtml((g.point || "").replace(/^🔖\s*/, "").replace(/\{\{([^|{}]+)\|[^{}]+\}\}/g, "$1"))}</button>`).join("")}
+      // 目錄可收合：手機預設收起（不然 30 個標題就佔掉一個多畫面），桌機預設展開
+      const tocOn = tocOpen === null ? !isNarrow() : tocOpen;
+      html += `<div class="gram-toc-row">
+        <details class="gram-toc-wrap"${tocOn ? " open" : ""}><summary>📑 目錄（${pts.length} 個文法點）</summary>
+          <div class="gram-toc">${pts.map((g, gi) =>
+          `<button class="toc-chip" data-go="${gidOf(gi)}" data-gi="${gi}">${
+            escHtml(stripRuby((g.point || "").replace(/^🔖\s*/, "")))}</button>`).join("")}</div>
+        </details>
         <button class="toc-chip toc-all" data-all="${openCnt >= pts.length ? "close" : "open"}" data-lk="${k}">${openCnt >= pts.length ? "▲ 全部收合" : "▼ 全部展開"}</button></div>`;
     }
     pts.forEach((g, gi) => {
@@ -1018,7 +1149,7 @@ function renderGrammar() {
       if (g.table) html += tableHtml(g.table);
       if (g.examples && g.examples.length)
         html += `<div class="block"><span class="blabel">例</span>${g.examples.map(ex => `
-          <div class="example${rubyCls(ex)}"><div class="jp">${jpHtml(ex)} ${playBtn(ex)}</div><div class="kana">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
+          <div class="example${rubyCls(ex)}"><div class="jp" lang="ja">${jpHtml(ex)} ${playBtn(ex)}</div><div class="kana" lang="ja">${ex.kana || ""}</div><div class="zh">${ex.zh || ""}</div></div>`).join("")}</div>`;
       if (g.practice && g.practice.length) {
         const pid = `pr_${lessonKey(l)}_${gi}`;
         html += `<div class="block"><span class="blabel">練習</span>${g.practice_note ? `<span class="pnote">${g.practice_note}</span>` : ""} <button class="link toggle-ans" data-t="${pid}">顯示/隱藏答案</button>
@@ -1029,7 +1160,12 @@ function renderGrammar() {
     });
   });
   root.innerHTML = html;
-  // 文法點展開／收合
+  root.querySelectorAll(".gram-toc-wrap").forEach(d => d.ontoggle = () => { tocOpen = d.open; });
+  // 文法點展開／收合（標題可用鍵盤 Tab 到、按 Enter 展開）
+  root.querySelectorAll(".gram-h").forEach(h => {
+    h.tabIndex = 0; h.setAttribute("role", "button");
+    h.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); h.click(); } };
+  });
   root.querySelectorAll(".gram-h").forEach(h => h.onclick = () => {
     const gk = h.dataset.gk;
     if (gramOpen.has(gk)) gramOpen.delete(gk); else gramOpen.add(gk);
@@ -1077,7 +1213,8 @@ function renderGrammar() {
 
 // ---- 測驗（單字中→日 + 練習題）----
 let quizPool = [], quizOrder = [], quizIdx = 0, quizCur = null, quizView = "quiz", quizKey = null;
-let quizWrong = [], quizAnswered = false;   // 本輪答錯的題號、本題是否已作答
+let quizWrong = [], quizDone = new Set();  // 本輪答錯的題號、本輪已作答過的題目位置（切分頁回來也不會重複計分）
+const stripRuby = s => String(s == null ? "" : s).replace(/\{\{([^|{}]+)\|[^{}]+\}\}/g, "$1");
 
 const EX_ASK = { translate: "把中文翻成日文", fill: "填入正確形態", choice: "選出正確答案" };
 const asArr = x => Array.isArray(x) ? x : (x ? [x] : []);
@@ -1087,7 +1224,7 @@ function buildQuizPool() {
     (l.vocab || []).forEach(v => {
       if (v.zh && v.jp) {
         const alts = (v.kana && v.kana !== v.jp) ? [v.kana] : [];  // 單字也接受假名作答
-        pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", alts, ask: "看中文，寫出日文單字", tag: lessonLabel(l) });
+        pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", alts, ask: "看中文，寫出日文單字", tag: lessonLabel(l), vocab: true, kana: v.kana || "" });
       }
     });
     (l.grammar || []).forEach(g => (g.practice || []).forEach(p => {
@@ -1098,12 +1235,30 @@ function buildQuizPool() {
   return pool;
 }
 
-// 比對答案：忽略空白／全形空白、句尾句點，接受多個正解
-function normAns(s) { return String(s == null ? "" : s).replace(/[\s　]/g, "").replace(/[。．.]+$/, "").trim(); }
+// 比對答案：全形／半形、大小寫、空白、標點（、。！？～「」…）都不計較
+function normAns(s) {
+  return stripRuby(s).normalize("NFKC").toLowerCase()
+    .replace(/\s/g, "")
+    .replace(/[。.、,，!?~〜「」『』"'“”‘’…・]/g, "");
+}
+// 一個參考答案可接受的寫法：
+//  ・括號內是可省略的補充（（私は）住んでいる…／…ようです。（＝忙しいみたいだ））→ 有寫、沒寫都算對
+//  ・題目只有一個空格時，「A／B」代表兩種都對；多個空格時「／」是空格之間的分隔，照順序寫完就對
+function ansVariants(a, q) {
+  const s = stripRuby(a).normalize("NFKC");
+  const out = new Set();
+  const add = x => { const n = normAns(x); if (n) out.add(n); };
+  const single = (String(q || "").match(/＿+|_{2,}/g) || []).length <= 1;
+  [s, s.replace(/\([^()]*\)/g, ""), s.replace(/[()]/g, "")].forEach(b => {
+    add(b.replace(/\//g, ""));
+    if (single && b.indexOf("/") >= 0) b.split("/").forEach(add);
+  });
+  return out;
+}
 function answerOK(input, cur) {
   const a = normAns(input);
   if (!a) return false;
-  return [cur.a, ...(cur.alts || [])].some(x => normAns(x) === a);
+  return [cur.a, ...(cur.alts || [])].some(x => ansVariants(x, cur.q).has(a));
 }
 
 function quizLen() { const v = parseInt(settings.quizLen); return isFinite(v) && v > 0 ? v : 0; }  // 0＝全部
@@ -1112,7 +1267,7 @@ function newQuizRound(fromIdx) {          // fromIdx：只重做這些題（錯�
   const n = quizLen();
   quizOrder = shuffle(all);
   if (!fromIdx && n && quizOrder.length > n) quizOrder = quizOrder.slice(0, n);
-  quizIdx = 0; quizWrong = [];
+  quizIdx = 0; quizWrong = []; quizDone = new Set();
 }
 
 function renderQuiz() {
@@ -1143,7 +1298,7 @@ function drawQuiz() {
       ${wrong ? `<div class="block"><span class="blabel">錯題</span>
         <ol class="practice show-ans">${quizWrong.map(i => {
           const c = quizPool[i];
-          return `<li><span class="pq">${c.q}</span> <span class="ans">${c.a}</span>${c.sub ? `<span class="ans-note">（${c.sub}）</span>` : ""}</li>`;
+          return `<li><span class="pq">${escHtml(stripRuby(c.q))}</span> <span class="ans">${escHtml(stripRuby(c.a))}</span>${c.sub ? `<span class="ans-note">（${escHtml(c.sub)}）</span>` : ""}</li>`;
         }).join("")}</ol></div>` : `<p class="empty">🎉 全部答對！</p>`}
       <div class="controls">
         ${wrong ? `<button class="btn-bad" id="quiz-wrong">↻ 只重做錯的 ${wrong} 題</button>` : ""}
@@ -1155,33 +1310,49 @@ function drawQuiz() {
     document.getElementById("quiz-list").onclick = () => { quizView = "list"; renderQuiz(); };
     return;
   }
-  quizAnswered = false;
   quizCur = quizPool[quizOrder[quizIdx]];
+  const hintable = quizCur.vocab && quizCur.kana;
   root.innerHTML = quizBar(`<span class="vcount">第 ${quizIdx + 1} / ${quizOrder.length} 題${quizWrong.length ? `　·　✗${quizWrong.length}` : ""}</span>`) + `
     <div class="ex-item">
-      ${quizCur.ask ? `<div class="quiz-ask">📝 考點：${quizCur.ask}</div>` : ""}
-      <div class="quiz-q">${quizCur.q}<span class="tag">${quizCur.tag}</span></div>
-      <input class="quiz-input" id="qin" placeholder="輸入日文答案後按 Enter…" autocomplete="off">
+      ${quizCur.ask ? `<div class="quiz-ask">📝 考點：${escHtml(stripRuby(quizCur.ask))}</div>` : ""}
+      <div class="quiz-q">${escHtml(stripRuby(quizCur.q))}<span class="tag">${escHtml(quizCur.tag)}</span></div>
+      <input class="quiz-input" id="qin" lang="ja" placeholder="輸入日文答案後按 Enter…" autocomplete="off"
+        autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
+      <div class="quiz-hint" id="qhint"></div>
       <div class="quiz-ans" id="qans"></div>
-      <div class="controls"><button class="btn-next" id="show">看答案</button></div>
+      <div class="controls">${hintable ? '<button class="btn-next" id="hint">💡 提示</button>' : ""}<button class="btn-next" id="show">看答案</button></div>
     </div>`;
   document.getElementById("quiz-list").onclick = () => { quizView = "list"; renderQuiz(); };
   const input = document.getElementById("qin");
   input.focus();
+  // 單字題的中文常有好幾個日文說法（例：突然的＝急な／突然）→ 提示讀音開頭與長度，縮小範圍
+  const hb = document.getElementById("hint");
+  if (hb) hb.onclick = () => {
+    const k = stripSymbols(quizCur.kana).replace(/[\s、。]/g, "");
+    document.getElementById("qhint").textContent = `💡 讀音開頭是「${k.charAt(0)}」，共 ${k.length} 個假名`;
+    hb.remove();
+  };
   const reveal = () => {
     const ok = answerOK(input.value, quizCur);
-    if (!quizAnswered) {                       // 只計一次（避免重複按「看答案」）
-      quizAnswered = true;
-      if (!ok) quizWrong.push(quizOrder[quizIdx]);
+    if (!quizDone.has(quizIdx)) {              // 同一題本輪只計一次（重按、切分頁回來都不再計）
+      quizDone.add(quizIdx);
+      if (!ok && quizWrong.indexOf(quizOrder[quizIdx]) < 0) quizWrong.push(quizOrder[quizIdx]);
+    }
+    // 答錯但寫的是本課另一個單字（常見於同義字）→ 說清楚，不讓人以為自己的日文錯了
+    let other = "";
+    if (!ok && quizCur.vocab) {
+      const hit = quizPool.find(p => p.vocab && p !== quizCur && answerOK(input.value, p));
+      if (hit) other = `<div class="quiz-other">「${escHtml(input.value.trim())}」是本課另一個單字（${escHtml(hit.q)}）；這題要的是「${escHtml(quizCur.a)}」。</div>`;
     }
     document.getElementById("qans").innerHTML =
-      `${ok ? '<span class="correct">✓ 正確！</span><br>' : '<span class="wrong">✗ 再看一次</span><br>'}答案：<b>${quizCur.a}</b>` +
-      (quizCur.sub ? `<br><span style="color:#777;font-size:14px">${quizCur.sub}</span>` : "");
+      `${ok ? '<span class="correct">✓ 正確！</span><br>' : '<span class="wrong">✗ 再看一次</span><br>'}答案：<b lang="ja">${escHtml(stripRuby(quizCur.a))}</b>` +
+      (quizCur.sub ? `<br><span class="quiz-sub">${escHtml(quizCur.sub)}</span>` : "") + other;
     const btn = document.getElementById("show");
     btn.textContent = quizIdx + 1 >= quizOrder.length ? "看結果" : "下一題 →";
     btn.onclick = () => { quizIdx++; drawQuiz(); };
   };
-  input.onkeydown = e => { if (e.key === "Enter") reveal(); };
+  // 日文輸入法選字時按的 Enter 只是「確定選字」，不能當成送出答案
+  input.onkeydown = e => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) reveal(); };
   document.getElementById("show").onclick = reveal;
 }
 
@@ -1192,8 +1363,8 @@ function renderQuizList() {
     `<button class="link" id="quiz-toggle">顯示/隱藏答案</button>
      <span class="vcount">共 ${quizPool.length} 題</span>`) +
     `<ol class="practice" id="quizlist">${quizPool.map(p => `
-      <li>${p.ask ? `<span class="ans-note">［${p.ask}］</span> ` : ""}<span class="pq">${p.q}</span>
-        <span class="ans">${p.a}</span>${p.sub ? `<span class="ans-note">（${p.sub}）</span>` : ""}</li>`).join("")}</ol>`;
+      <li>${p.ask ? `<span class="ans-note">［${escHtml(stripRuby(p.ask))}］</span> ` : ""}<span class="pq">${escHtml(stripRuby(p.q))}</span>
+        <span class="ans">${escHtml(stripRuby(p.a))}</span>${p.sub ? `<span class="ans-note">（${escHtml(p.sub)}）</span>` : ""}</li>`).join("")}</ol>`;
   // 此模式下「列出全部題庫」鈕改成回作答
   const back = document.getElementById("quiz-list");
   back.textContent = "📝 作答模式";
@@ -1204,7 +1375,8 @@ function renderQuizList() {
 }
 
 // ---- 📖 文章閱讀（全文顯示＋朗讀，高亮目前句、可連續接下一篇）----
-const reader = { on: false, art: null, idx: 0, tick: null, wake: null, continuous: true };
+// seq：每次停止／重新開始就 +1，讓被 cancel() 打斷那句的 onend/onerror（非同步才觸發）失效，不會變成兩條朗讀鏈
+const reader = { on: false, art: null, idx: 0, tick: null, wake: null, continuous: true, seq: 0 };
 function articleKey(a) { return "A-" + (a._file ? a._file.replace(/\.ya?ml$/, "") : ARTICLES.indexOf(a)); }
 async function reqWakeR() { try { if (navigator.wakeLock) reader.wake = await navigator.wakeLock.request("screen"); } catch (e) { } }
 function relWakeR() { try { if (reader.wake) reader.wake.release(); } catch (e) { } reader.wake = null; }
@@ -1216,6 +1388,7 @@ function highlightRead(i) {
 }
 function stopReader() {
   reader.on = false;
+  reader.seq++;
   if (reader.tick) { clearInterval(reader.tick); reader.tick = null; }
   if (window.speechSynthesis) speechSynthesis.cancel();
   relWakeR();
@@ -1225,8 +1398,10 @@ function stopReader() {
 function startReader(fromIdx) {
   const l = activeLessons()[0];
   if (!l || !l._article) return;
+  stopOtherSpeech("reader");
   reader.art = l._article;
   reader.idx = (typeof fromIdx === "number") ? fromIdx : 0;
+  reader.seq++;
   reader.on = true;
   reqWakeR();
   const b = document.getElementById("read-toggle"); if (b) { b.textContent = "⏹ 停止"; b.classList.add("on"); }
@@ -1249,11 +1424,13 @@ function readerStep() {
   }
   const s = body[reader.idx];
   highlightRead(reader.idx);
+  const seq = reader.seq;
+  const alive = () => reader.on && reader.seq === seq;
   const u = new SpeechSynthesisUtterance(sayText(s));
   u.lang = "ja-JP"; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
   applyJaVoice(u);
-  u.onend = () => { if (reader.on) { reader.idx++; setTimeout(() => { if (reader.on) readerStep(); }, 350); } };
-  u.onerror = () => { if (reader.on) { reader.idx++; readerStep(); } };
+  u.onend = () => { if (alive()) { reader.idx++; setTimeout(() => { if (alive()) readerStep(); }, 350); } };
+  u.onerror = () => { if (alive()) { reader.idx++; readerStep(); } };
   if (window.speechSynthesis) speechSynthesis.speak(u);
 }
 function finishReader() {
@@ -1284,8 +1461,8 @@ function renderArticle() {
     </div>
     <div class="read-body ${showCls}">
       ${(a.body || []).map((s, i) => `<p class="rsent${rubyCls(s)}" id="rs${i}" data-i="${i}">
-        <span class="rs-jp">${jpHtml(s)}</span>
-        <span class="rs-kana">${s.kana || ""}</span>
+        <span class="rs-jp" lang="ja">${jpHtml(s)}</span>
+        <span class="rs-kana" lang="ja">${s.kana || ""}</span>
         <span class="rs-zh">${s.zh || ""}</span></p>`).join("")}
     </div>`;
   document.getElementById("read-toggle").onclick = () => { if (reader.on) stopReader(); else startReader(); };
@@ -1304,7 +1481,7 @@ function renderArticle() {
 }
 
 // ---- 🎧 廣播聽力（連續朗讀，邊運動邊聽）----
-const radio = { on: false, deck: [], idx: 0, timer: null, tick: null, endAt: 0, wake: null, now: null };
+const radio = { on: false, deck: [], idx: 0, timer: null, tick: null, endAt: 0, wake: null, now: null, seq: 0 };
 
 const ARTICLE_SCOPES = ["mine", "article", "short", "long"];
 function articlePool(filterFn) {
@@ -1336,6 +1513,7 @@ function relWake() { try { if (radio.wake) radio.wake.release(); } catch (e) { }
 
 function stopRadio() {
   radio.on = false;
+  radio.seq++;
   if (radio.timer) { clearTimeout(radio.timer); radio.timer = null; }
   if (radio.tick) { clearInterval(radio.tick); radio.tick = null; }
   if (window.speechSynthesis) speechSynthesis.cancel();
@@ -1346,15 +1524,17 @@ function stopRadio() {
 function speakSeq(parts, done) {
   if (!window.speechSynthesis || !parts.length) { if (done) done(); return; }
   let i = 0;
+  const seq = radio.seq;
+  const alive = () => radio.on && radio.seq === seq;
   const step = () => {
-    if (!radio.on) return;
+    if (!alive()) return;
     if (i >= parts.length) { if (done) done(); return; }
     const p = parts[i++];
     const u = new SpeechSynthesisUtterance(p.text);
     u.lang = p.lang; u.rate = settings.rate || 0.9; u.volume = numSet("volume", 1);
     if (p.lang.indexOf("ja") === 0) applyJaVoice(u);
-    u.onend = () => { if (radio.on) step(); };
-    u.onerror = () => { if (radio.on) step(); };
+    u.onend = () => { if (alive()) step(); };
+    u.onerror = () => { if (alive()) step(); };
     speechSynthesis.speak(u);
   };
   step();
@@ -1370,6 +1550,7 @@ function startRadio() {
   const pool = buildRadioPool();
   if (!pool.length) { renderRadio(); return; }
   stopRadio();
+  stopOtherSpeech("radio");
   radio.deck = isArticleMode() ? pool : shuffle(pool);   // 文章照順序，其餘隨機
   radio.idx = 0; radio.on = true;
   radio.endAt = Date.now() + numSet("radioMins", 20) * 60000;
@@ -1394,9 +1575,10 @@ function radioStep() {
   const ja = sayText(it);
   for (let k = 0; k < reps; k++) parts.push({ text: ja, lang: "ja-JP" });
   if (settings.radioZh && it.zh) parts.push({ text: stripSymbols(it.zh), lang: "zh-TW" });
+  const seq = radio.seq;
   speakSeq(parts, () => {
-    if (!radio.on) return;
-    radio.timer = setTimeout(() => { if (!radio.on) return; radio.idx++; radioStep(); }, numSet("radioGap", 1.5) * 1000);
+    if (!radio.on || radio.seq !== seq) return;
+    radio.timer = setTimeout(() => { if (!radio.on || radio.seq !== seq) return; radio.idx++; radioStep(); }, numSet("radioGap", 1.5) * 1000);
   });
 }
 
@@ -1413,8 +1595,8 @@ function drawRadioNow(it) {
   if (!el) return;
   el.innerHTML = `
     <div class="rn-tag">${it.tag || ""}</div>
-    <div class="rn-jp">${it.jp || ""}</div>
-    <div class="rn-kana">${it.kana || ""}</div>
+    <div class="rn-jp" lang="ja">${it.jp || ""}</div>
+    <div class="rn-kana" lang="ja">${it.kana || ""}</div>
     <div class="rn-zh">${(settings.radioShowZh || settings.radioZh) ? (it.zh || "") : ""}</div>`;
 }
 

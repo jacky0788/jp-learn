@@ -426,7 +426,8 @@ def stamp_version():
     for name in ("data.js", "app.js", "style.css"):
         p = WEB_DIR / name
         if p.exists():
-            assets.append(p.read_bytes())
+            # 換行統一成 LF 再算：Windows（CRLF）與 Mac／雲端（LF）同樣內容才會得到同一個版本號
+            assets.append(p.read_bytes().replace(b"\r\n", b"\n"))
     ver = hashlib.sha1(b"".join(assets)).hexdigest()[:8]
 
     idx = WEB_DIR / "index.html"

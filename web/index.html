@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="日文複習">
-<link rel="stylesheet" href="style.css?v=9ce1992a">
+<link rel="stylesheet" href="style.css?v=30e681da">
 </head>
 <body>
 <header>
@@ -55,6 +55,11 @@
     <label class="set-row"><span>單字卡每輪張數</span><select id="set-cardlen"><option value="10">10 張</option><option value="20">20 張</option><option value="30">30 張</option><option value="50">50 張</option><option value="0">全部</option></select></label>
     <div class="set-note">分批練習比較容易完成。單字卡會<b>優先給還不熟的</b>；測驗做完會顯示答對率，並可<b>只重做錯的題目</b>。</div>
 
+    <div class="set-section">學習進度</div>
+    <div class="set-row"><span>備份／還原單字熟練度與設定</span><span class="btn-pair"><button class="btn-next" id="prog-export">⬇ 匯出</button><button class="btn-next" id="prog-import">⬆ 匯入</button></span></div>
+    <input type="file" id="prog-file" accept="application/json,.json" hidden>
+    <div class="set-note">進度只存在<b>這個瀏覽器</b>裡。清除瀏覽資料、換手機，或 iPhone 用 Safari 分頁開又 7 天沒開時，進度可能會不見——建議偶爾匯出備份。手機建議用「加入主畫面」開啟。</div>
+
     <div class="set-section">其他</div>
     <label class="set-row"><span>內容更新紀錄</span><button class="btn-next" id="log-open">📋 開啟工作日誌</button></label>
 
@@ -79,7 +84,7 @@
   </div>
 </div>
 
-<script src="data.js?v=9ce1992a"></script>
-<script src="app.js?v=9ce1992a"></script>
+<script src="data.js?v=30e681da"></script>
+<script src="app.js?v=30e681da"></script>
 </body>
 </html>

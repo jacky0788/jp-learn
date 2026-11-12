@@ -542,3 +542,52 @@ body.dark #side-toggle { background: #1f232a; color: #cdd6e6; border-color: #333
 body.dark #lesson-picker { border-right-color: #333a44; }
 body.dark #side-toggle { background: #232831; color: #cdd6e6; border-color: #3a3f47; }
 body.dark #side-toggle:hover { background: #2a303a; }
+
+/* ===== 2026-11 校對後的 UI 修正 ===== */
+/* 日文用日文字形（Android 上預設會用中文字形顯示日文漢字） */
+:lang(ja) { font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif; }
+
+/* 手機選單開關：加大成可點的按鈕，收起時顯示目前課名 */
+#side-toggle .st-label { margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 899px) {
+  #side-toggle { width: auto; min-width: 120px; max-width: calc(100% - 32px); height: auto; min-height: 36px;
+    padding: 6px 16px; font-size: 13px; }
+}
+@media (min-width: 900px) { #side-toggle .st-label { display: none; } }
+
+/* 文法目錄：可收合（手機預設收起） */
+.gram-toc-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin: 0 0 14px; }
+.gram-toc-wrap { flex: 0 1 auto; }
+.gram-toc-wrap[open] { flex-basis: 100%; }      /* 展開時目錄佔滿一列，「全部展開」排到下面 */
+.gram-toc-wrap > summary { display: inline-block; cursor: pointer; font-size: 13px; color: #2b3a55;
+  background: #eef1f5; border: 1px solid #dde3ea; border-radius: 14px; padding: 4px 12px; list-style: none; }
+.gram-toc-wrap > summary::-webkit-details-marker { display: none; }
+.gram-toc-wrap > summary::after { content: " ▾"; }
+.gram-toc-wrap[open] > summary::after { content: " ▴"; }
+.gram-toc-wrap .gram-toc { margin: 8px 0 0; }
+body.dark .gram-toc-wrap > summary { background: #2a303a; border-color: #3a3f47; color: #cdd6e6; }
+
+/* 測驗：提示、同義字說明、補充說明 */
+.quiz-hint { margin-top: 10px; font-size: 15px; color: #2b3a55; }
+.quiz-hint:empty { display: none; }
+.quiz-other { margin-top: 8px; font-size: 15px; color: #8a5a00; background: #fff5dc; border-radius: 6px; padding: 6px 10px; }
+.quiz-sub { color: #5a6679; font-size: 14px; }
+body.dark .quiz-hint { color: #cdd6e6; }
+body.dark .quiz-other { color: #ffe9a8; background: #3a3320; }
+body.dark .quiz-sub { color: #aeb6c2; }
+.controls #hint { margin-right: 6px; }
+
+/* 設定：匯出／匯入兩顆鈕並排 */
+.btn-pair { display: inline-flex; gap: 6px; flex: none; }
+
+/* 深色模式的「還不熟／記得了」：原本是亮粉／亮綠，在深色底上太刺眼 */
+body.dark .btn-good { background: #1f3a2a; color: #8fd9a8; }
+body.dark .btn-bad { background: #3d2323; color: #f0a19a; }
+
+/* 鍵盤操作時看得到焦點 */
+#lesson-checks label:focus-visible, .gram-h:focus-visible { outline: 2px solid #4a7bd0; outline-offset: 2px; }
+
+/* iPhone：輸入框字小於 16px 時一點就會自動放大頁面 */
+@media (max-width: 899px) {
+  #lesson-search, .set-row select, .set-row input[type=number], #radio-mins { font-size: 16px; }
+}
