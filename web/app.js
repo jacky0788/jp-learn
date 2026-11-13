@@ -1238,7 +1238,8 @@ function buildQuizPool() {
   activeLessons().forEach(l => {
     (l.vocab || []).forEach(v => {
       if (v.zh && v.jp) {
-        const alts = (v.kana && v.kana !== v.jp) ? [v.kana] : [];  // 單字也接受假名作答
+        // 單字也接受假名作答；外來語也接受打成平假名（讀音欄改成片假名後，維持原本的寬容）
+        const alts = [...new Set([v.kana, searchNorm(v.kana)])].filter(x => x && x !== v.jp);
         pool.push({ q: v.zh, a: v.jp, sub: v.kana || "", alts, ask: "看中文，寫出日文單字", tag: lessonLabel(l), vocab: true, kana: v.kana || "" });
       }
     });
